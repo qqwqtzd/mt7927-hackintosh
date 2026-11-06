@@ -1,0 +1,86 @@
+MT7927 驱动安装回滚说明
+========================
+
+安装时间：2026-11-06 11:30
+改动：OpenCore EFI（disk0s1）里的
+  - UTBMap.kext（13 端口，去掉前置 USB2.0）
+  - BlueToolFixup.kext / MtkBt.kext / MtkWlan.kext / MtkWlanNative.kext
+  - config.plist 的 Kernel > Add、NVRAM、boot-args
+
+备份位置
+--------
+1. macOS 用户目录（完整 EFI）：
+   /Users/links/EFI-before-mt7927-20261106-113056
+
+2. 同一个 EFI 分区内（完整 EFI 副本）：
+   EFI/EFI-backup-mt7927-20261106-113056
+
+3. Ventoy U 盘（第二份完整 EFI 副本，U 盘根目录）：
+   EFI-backup-mt7927-20261106-113056
+
+4. EFI 内单独备份：
+   EFI/OC/config.plist.before-mt7927-20261106-113056
+   EFI/OC/Kexts/UTBMap.kext.before-mt7927-20261106-112956
+
+如果 macOS 启动不了
+--------------------
+先不要慌，EFI 是 FAT32，Windows / Windows PE / macOS Recovery 都能读写。
+
+A. 先试 OpenCore 菜单
+   - 能进 OpenCore 菜单：选 Windows 或 Recovery。
+   - 能进 Recovery：用 Recovery 的终端恢复（见 C）。
+   - OpenCore 菜单都进不去：开机按 F11/F12 选 Windows Boot Manager，
+     或从 Ventoy U 盘启动 Windows PE。
+
+B. 在 Windows 里恢复（推荐）
+   1. 以管理员打开 cmd，执行 diskpart：
+        diskpart
+        list disk
+        select disk 0          （512GB Samsung，macOS 盘；请按容量确认）
+        list partition
+        select partition 1     （314MB EFI；如果不对，换另一个 314MB 分区）
+        assign letter=Z
+        exit
+   2. 确认 Z:\EFI\OC\OpenCore.efi 存在：
+        dir Z:\EFI\OC
+      如果不存在，说明选错 EFI，重新 assign 另一个 314MB 分区。
+   3. 恢复完整 OC：
+        rmdir /s /q Z:\EFI\OC
+        xcopy /e /i /h Z:\EFI-backup-mt7927-20261106-113056\OC Z:\EFI\OC
+   4. 如果 Z: 上没有 EFI-backup 文件夹，插 Ventoy U 盘，
+      从它的 EFI-backup-mt7927-20261106-113056\OC 复制。
+   5. 重启。
+
+   也可以只恢复两个关键文件：
+        copy /y Z:\EFI\OC\config.plist.before-mt7927-20261106-113056 Z:\EFI\OC\config.plist
+        rmdir /s /q Z:\EFI\OC\Kexts\UTBMap.kext
+        xcopy /e /i /h Z:\EFI\OC\Kexts\UTBMap.kext.before-mt7927-20261106-112956 Z:\EFI\OC\Kexts\UTBMap.kext
+   这样会去掉新 kext 的加载项（config 回到旧版），并恢复旧 USB map。
+
+C. 在 macOS Recovery 里恢复
+   1. OpenCore 菜单选 Recovery。
+   2. 打开 Utilities > Terminal：
+        diskutil list
+        diskutil mount disk0s1
+        cd "/Volumes/NO NAME 1"
+        rm -rf EFI/OC
+        cp -R EFI/EFI-backup-mt7927-20261106-113056/OC EFI/OC
+        diskutil unmount disk0s1
+        reboot
+   3. 如果 Recovery 里挂载点不是 "NO NAME 1"，用 `diskutil list` 确认
+      314MB EFI 的实际挂载点。
+
+D. EFI 分区本身损坏
+   用 Ventoy U 盘里的 EFI-backup-mt7927-20261106-113056，
+   或另一台电脑把该文件夹写回 EFI 分区。
+
+E. 只想临时跳过新驱动
+   在 OpenCore 菜单里按空格显示辅助项，或用另一份 EFI 启动；
+   本次改动没有动 macOS 系统盘，只动了 EFI，恢复 EFI 即可。
+
+注意
+----
+- 不要选错 EFI：OpenCore 的那个 EFI 里有 EFI/OC/OpenCore.efi；
+  Windows 的 EFI 只有 EFI/MICROSOFT。
+- 两个 NVMe 的 EFI 都是 314MB，按容量无法区分，必须看 EFI/OC 是否存在。
+- 恢复后如果 macOS 正常，原 UTBMap.kext / config 会在 EFI 内保留为 .before-* 备份。

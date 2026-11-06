@@ -1,0 +1,253 @@
+diff --git a/firmware/BT_RAM_CODE_MT6639_2_1_hdr.bin b/firmware/BT_RAM_CODE_MT6639_2_1_hdr.bin
+new file mode 100644
+index 0000000..91eb04d
+Binary files /dev/null and b/firmware/BT_RAM_CODE_MT6639_2_1_hdr.bin differ
+diff --git a/firmware/SHA256SUMS b/firmware/SHA256SUMS
+index bc4008a..31f09bc 100644
+--- a/firmware/SHA256SUMS
++++ b/firmware/SHA256SUMS
+@@ -1 +1,2 @@
+ be7c18e37221e277baaef853be3a0ba930138ee879f336ff7b185e79ab09a5c9  BT_RAM_CODE_MT7925_1_1_hdr.bin
++669c5c99a0c59c85c1285d3d1b8b31915c2d31341a2244f4eddcbfd60ffbbc76  BT_RAM_CODE_MT6639_2_1_hdr.bin
+diff --git a/src/MtkBt.cpp b/src/MtkBt.cpp
+index 15ae55b..bf35b31 100644
+--- a/src/MtkBt.cpp
++++ b/src/MtkBt.cpp
+@@ -68,7 +68,9 @@
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+ #include <IOKit/usb/IOUSBHostInterface.h>
++#include <IOKit/usb/IOUSBHostDevice.h>
+ #include <IOKit/usb/IOUSBHostPipe.h>
++#include <libkern/OSByteOrder.h>
+ #include <libkern/OSAtomic.h>
+ #include <kern/thread.h>
+ #include <kern/clock.h>
+@@ -80,6 +82,10 @@ extern const unsigned int mtk_bt_fw_len;
+ extern const char mtk_bt_fw_sha256[];
+ extern const char mtk_bt_fw_name[];
+ extern const unsigned char mtk_bt_fw[];
++extern const unsigned int mtk_bt_fw_7927_len;
++extern const char mtk_bt_fw_7927_sha256[];
++extern const char mtk_bt_fw_7927_name[];
++extern const unsigned char mtk_bt_fw_7927[];
+ }
+ 
+ namespace {
+@@ -156,6 +162,7 @@ private:
+     volatile bool stopping = false, intrStop = false, intrBusy = false, opened = false;
+     volatile bool offPath = false;     // the FUNC_CTRL 0 session runs although stopping is set
+     bool chipSeen = false, offDone = false;
++    bool chip6639 = false;     // MT7927 Bluetooth half (MT6639): different firmware path and section filter
+     volatile uint32_t intrPackets = 0;
+     // last HCI Command Complete seen on the interrupt endpoint (for the warm-reboot HCI probe)
+     volatile uint16_t lastCcOpcode = 0;
+@@ -163,7 +170,7 @@ private:
+     uint8_t intrAddr = 0, bulkIn = 0, bulkOut = 0;
+     char log[1536] = {0};
+     size_t loglen = 0;
+-    uint32_t bytesSent = 0, blocksSent = 0, sectionsSent = 0, sectionsSkipped = 0;
++    uint32_t bytesSent = 0, blocksSent = 0, sectionsSent = 0, sectionsSkipped = 0, sectionsFiltered = 0;
+ 
+     static void worker(void *arg, wait_result_t);
+     void run();
+@@ -182,6 +189,7 @@ private:
+     void findEndpoints();
+     IOReturn ctrl(uint8_t type, uint8_t req, uint16_t value, uint16_t index, void *buf, uint16_t len, uint32_t *done);
+     bool regRead(uint32_t reg, uint32_t *val);
++    bool usbVidPid(uint16_t &vid, uint16_t &pid);
+     bool uhwRead(uint32_t reg, uint32_t *val);
+     bool uhwWrite(uint32_t reg, uint32_t val);
+     bool slpProtBypass(const char *when);
+@@ -258,6 +266,17 @@ bool MtkBt::regRead(uint32_t reg, uint32_t *val) {
+     return true;
+ }
+ 
++// USB device descriptor ids, for the MT6639 zero-CHIPID workaround (btmtk_usb_setup).
++bool MtkBt::usbVidPid(uint16_t &vid, uint16_t &pid) {
++    IOUSBHostDevice *dev = intf ? intf->getDevice() : nullptr;
++    const StandardUSB::DeviceDescriptor *d = dev ? dev->getDeviceDescriptor() : nullptr;
++    if (!d)
++        return false;
++    vid = OSSwapLittleToHostInt16(d->idVendor);
++    pid = OSSwapLittleToHostInt16(d->idProduct);
++    return true;
++}
++
+ // btmtk_usb_uhw_reg_read: request type 0xDE, bRequest 0x01
+ bool MtkBt::uhwRead(uint32_t reg, uint32_t *val) {
+     uint32_t n = 0;
+@@ -357,8 +376,8 @@ int MtkBt::wmt(uint8_t op, uint8_t flag, const uint8_t *data, uint16_t dlen, uin
+ // then resets the subsystem and tries again). Linux has no such split: it fails setup and lets
+ // btusb_mtk_reset / the next hdev open sort it out.
+ int MtkBt::download() {
+-    const uint8_t *fw = mtk_bt_fw;
+-    const uint32_t fwlen = mtk_bt_fw_len;
++    const uint8_t *fw = chip6639 ? mtk_bt_fw_7927 : mtk_bt_fw;
++    const uint32_t fwlen = chip6639 ? mtk_bt_fw_7927_len : mtk_bt_fw_len;
+     if (fwlen < kFwHdrSize + kFwGdSize) {
+         fail("firmware blob too small");
+         return DL_FAIL;
+@@ -385,6 +404,13 @@ int MtkBt::download() {
+         uint32_t dl = le32(map + kSecCommonSize + 4);   // bin_info_spec.dlsize
+         if (!dl)
+             continue;
++        // MT6639: the blob also contains WiFi/other sections. Only (dlmodecrctype & 0xff) == 0x01 is the
++        // Bluetooth RAM code; sending the others hangs the BT subsystem until a full power cycle.
++        if (chip6639 && (le32(map + kSecCommonSize + 20) & 0xff) != 0x01) {
++            sectionsFiltered++;
++            say("section %u: skipped (not a Bluetooth section)", i);
++            continue;
++        }
+         if (off > fwlen || dl > fwlen - off) {
+             fail("section %u out of range", i);
+             return DL_FAIL;
+@@ -447,6 +473,7 @@ int MtkBt::download() {
+     }
+     if (stopping)
+         return DL_FAIL;
++    setProperty("MtkBtSectionsFiltered", sectionsFiltered, 32);
+     IOSleep(110);   // "Wait a few moments for firmware activation done" (usleep_range 100-120 ms)
+     return DL_OK;
+ }
+@@ -505,8 +532,9 @@ bool MtkBt::subsysReset() {
+     if (!done)
+         fail("subsys reset: RST_DONE timeout");   // Linux: "Reset timeout", carries on
+     uint32_t id = 0;
+-    if (!regRead(kRegChipId, &id) || !id) {
+-        fail("subsys reset: no chip id afterwards");   // Linux: "Can't get device id, subsys reset fail."
++    if (!regRead(kRegChipId, &id) || (!id && !chip6639)) {
++        // Linux: "Can't get device id, subsys reset fail" but an MT6639 reading 0 is accepted.
++        fail("subsys reset: no chip id afterwards");
+         return false;
+     }
+     return true;
+@@ -650,25 +678,48 @@ bool MtkBt::setup() {
+     step("chip id");
+     if (!regRead(kRegChipId, &devId))
+         return false;
++    // btmtk_usb_setup: some MT6639 boards return CHIPID 0x0000. Match the USB ids and force 0x6639.
++    if ((devId & 0xFFFF) == 0) {
++        static const struct { uint16_t vid, pid; } kMt6639Ids[] = {
++            {0x0489, 0xE13A}, {0x0489, 0xE0FA}, {0x0489, 0xE10F},
++            {0x0489, 0xE110}, {0x0489, 0xE116}, {0x13D3, 0x3588},
++        };
++        uint16_t vid = 0, pid = 0;
++        if (usbVidPid(vid, pid)) {
++            for (unsigned i = 0; i < sizeof(kMt6639Ids) / sizeof(kMt6639Ids[0]); i++) {
++                if (vid == kMt6639Ids[i].vid && pid == kMt6639Ids[i].pid) {
++                    devId = 0x6639;
++                    setProperty("MtkBtChipIdForced", "0x6639");
++                    say("MT6639: CHIPID=0x0000 with VID=%04x PID=%04x, using 0x6639", vid, pid);
++                    break;
++                }
++            }
++        }
++    }
++    chip6639 = ((devId & 0xFFFF) == 0x6639);
+     regRead(kRegFwVer, &fwVer);
+     regRead(kRegFwFlavor, &flavor);
+     setProperty("MtkBtChipId", devId, 32);
++    setProperty("MtkBtChipFamily", chip6639 ? "MT7927 (MT6639)" : "MT7925");
+     setProperty("MtkBtFwVersion", fwVer, 32);
+     setProperty("MtkBtFwFlavor", (flavor & 0x80) >> 7, 32);
+     say("chip %04x fw_ver %08x flavor %u", devId & 0xFFFF, fwVer, (flavor & 0x80) >> 7);
+-    if ((devId & 0xFFFF) != 0x7925) {
+-        fail("not an MT7925, leaving it alone");
++    if (!chip6639 && (devId & 0xFFFF) != 0x7925) {
++        fail("not an MT7925/MT7927, leaving it alone");
+         return false;
+     }
+     chipSeen = true;   // from now on FUNC_CTRL 0 at shutdown makes sense
+-    // btmtk_fw_get_filename: mediatek/mt7925/BT_RAM_CODE_MT7925_1_%x_hdr.bin with (fw_ver & 0xff) + 1
+-    if ((fwVer & 0xFF) + 1 != 1)
+-        say("chip asks for BT_RAM_CODE_MT7925_1_%x_hdr.bin, carrying _1_1", (fwVer & 0xFF) + 1);
++    const char *fwName = chip6639 ? mtk_bt_fw_7927_name : mtk_bt_fw_name;
++    setProperty("MtkBtFirmware", fwName);
++    setProperty("MtkBtFirmwareSha256", chip6639 ? mtk_bt_fw_7927_sha256 : mtk_bt_fw_sha256);
++    setProperty("MtkBtFirmwareBytes", chip6639 ? mtk_bt_fw_7927_len : mtk_bt_fw_len, 32);
++    // btmtk_fw_get_filename: MT7927 uses mediatek/mt7927/BT_RAM_CODE_MT6639_2_%x_hdr.bin (fw_ver & 0xff) + 1
++    say("chip asks for firmware %s, carrying it", fwName);
+ 
+     // pass 1 is the normal download; passes 2 .. kMaxResets + 1 each follow a subsystem reset
+     for (uint32_t pass = 1;; pass++) {
+         setProperty("MtkBtTries", pass, 32);
+-        sectionsSent = sectionsSkipped = 0;
++        sectionsSent = sectionsSkipped = sectionsFiltered = 0;
+         step("slpprot bypass");
+         slpProtBypass(pass == 1 ? "before download" : "after subsys reset");
+         step("download");
+diff --git a/tools/gen_firmware.py b/tools/gen_firmware.py
+index 32d7f9b..6ae9cfa 100644
+--- a/tools/gen_firmware.py
++++ b/tools/gen_firmware.py
+@@ -1,20 +1,22 @@
+ # <wtl> project: mtkbt | file: tools/gen_firmware.py | author: watchthelight </wtl>
+-"""Turn the MT7925 Bluetooth firmware in firmware/ into a C file the MtkBt kext links in.
++"""Turn the MediaTek Bluetooth firmware in firmware/ into a C file the MtkBt kext links in.
+ 
+   python3 tools/gen_firmware.py <out.c>
+ 
+-The blob comes from linux-firmware (mediatek/mt7925, commit d5455717ead0) and is
+-redistributable under LICENSES/LICENCE.mediatek. Its SHA-256 is checked against
+-firmware/SHA256SUMS and against the prefix pinned here, and embedded so the driver can
+-publish which firmware it carries.
++MT7925 comes from linux-firmware (mediatek/mt7925); MT7927/MT6639 is the
++MediaTek blob extracted from the vendor driver (mediatek/mt7927). Each SHA-256
++is checked against firmware/SHA256SUMS and embedded, so the driver can publish
++which firmware it carries.
+ """
+ import hashlib
+ import sys
+ from pathlib import Path
+ 
+ FW = Path(__file__).resolve().parents[1] / "firmware"
+-BLOB = ("mtk_bt_fw", "BT_RAM_CODE_MT7925_1_1_hdr.bin")
+-PIN_PREFIX = "be7c18e37221e277"  # pinned here too, so a changed SHA256SUMS cannot slip a new blob in
++BLOBS = [
++    ("mtk_bt_fw", "BT_RAM_CODE_MT7925_1_1_hdr.bin", "mediatek/mt7925"),
++    ("mtk_bt_fw_7927", "BT_RAM_CODE_MT6639_2_1_hdr.bin", "mediatek/mt7927"),
++]
+ 
+ 
+ def pinned():
+@@ -28,24 +30,23 @@ def pinned():
+ 
+ def main(dst):
+     sums = pinned()
+-    sym, name = BLOB
+-    data = (FW / name).read_bytes()
+-    digest = hashlib.sha256(data).hexdigest()
+-    if sums.get(name) != digest:
+-        sys.exit(f"{name}: sha256 {digest} does not match firmware/SHA256SUMS")
+-    if not digest.startswith(PIN_PREFIX):
+-        sys.exit(f"{name}: sha256 {digest} does not start with the pinned prefix {PIN_PREFIX}")
+     lines = ["// generated by tools/gen_firmware.py from firmware/, do not edit",
+-             "#include <stdint.h>",
+-             f"const unsigned int {sym}_len = {len(data)}u;",
+-             f'const char {sym}_sha256[] = "{digest}";',
+-             f'const char {sym}_name[] = "mediatek/mt7925/{name}";',
+-             f"const unsigned char {sym}[] __attribute__((aligned(16))) = {{"]
+-    for i in range(0, len(data), 16):
+-        lines.append("  " + ", ".join(f"0x{b:02x}" for b in data[i:i + 16]) + ",")
+-    lines.append("};")
++             "#include <stdint.h>"]
++    for sym, name, dirname in BLOBS:
++        data = (FW / name).read_bytes()
++        digest = hashlib.sha256(data).hexdigest()
++        if sums.get(name) != digest:
++            sys.exit(f"{name}: sha256 {digest} does not match firmware/SHA256SUMS")
++        lines.append(f"const unsigned int {sym}_len = {len(data)}u;")
++        lines.append(f'const char {sym}_sha256[] = "{digest}";')
++        lines.append(f'const char {sym}_name[] = "{dirname}/{name}";')
++        lines.append(f"const unsigned char {sym}[] __attribute__((aligned(16))) = {{")
++        for i in range(0, len(data), 16):
++            lines.append("  " + ", ".join(f"0x{b:02x}" for b in data[i:i + 16]) + ",")
++        lines.append("};")
++        lines.append("")
+     Path(dst).write_text("\n".join(lines) + "\n", encoding="utf-8")
+-    print(f"{dst}: {name} {len(data)} bytes sha256 {digest}")
++    print(f"{dst}: {', '.join(name for _, name, _ in BLOBS)}")
+ 
+ 
+ if __name__ == "__main__":

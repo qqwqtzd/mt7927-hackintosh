@@ -1,0 +1,22 @@
+# 子仓库（各有 origin，作为独立 git 单元；本仓库只是总装说明）
+/WTLMtkWireless/
+/WTLMtkBluetooth/
+/WTLWifiMenu/
+
+# 引用的上游源码（体积大，clone 后自行获取）
+/linux-ref/
+/mediatek-mt7927-dkms/
+/asus-driver/
+/firmware-mt7927/
+/firmware-mt7927-asus/
+
+# 构建产物（kext 二进制不入库，见发布说明）
+/dist/*.kext/
+/dist/MtkWlanNative.kext/
+/out/
+
+# 运行时产物
+.DS_Store
+*.log
+/out/
+third-party/BrcmPatchRAM-*.zip

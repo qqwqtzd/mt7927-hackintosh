@@ -1,0 +1,66 @@
+# MtkWlan Wi-Fi / Bluetooth 恢复指南（Windows 侧）
+
+如果 macOS 开机进不去系统（黑屏 / 反复重启 / 内核 panic），**首先怀疑最新安装的
+MtkWlan.kext**。本目录的两个 .bat 脚本可以在 Windows 下直接恢复，无需懂命令。
+
+## 先确定哪块盘：本机的 OpenCore EFI 在 512GB SSD 上
+
+`diskpart` 的 `list disk` 输出里，选择 **SAMSUNG MZVL4512HBLU-00BH1（512GB）** 那块
+（它含 314MB 的 NO NAME EFI 分区，macOS 装在 511.8GB APFS 分区）。不要选 2TB
+Windows 盘（那块只有 Boot/Microsoft，没有 EFI\OC）。
+
+注意：**disk 编号（Disk 0 / Disk 1 / Disk 2）在每次重启后会变**（macOS 会给两块
+NVMe 重新排序）。判断依据永远是 **容量 512GB + 型号 SAMSUNG**，不要记编号；
+openCore 一定在「含 314MB NO NAME EFI、且该 EFI 里有 EFI\OC 目录」的那块盘上，
+在 Windows 分配盘符后可以直接看 `Z:\EFI\OC\OpenCore.efi` 是否存在来确认。
+
+## 快速恢复（禁用 Wi-Fi/BT 驱动，保证能进系统）
+
+1. 在 Windows 上打开“命令提示符（管理员）”，先给 EFI 分区分配盘符：
+   ```
+   diskpart
+   list disk
+   select disk <512GB SAMSUNG 那块的编号>
+   select partition 1
+   assign letter=Z
+   exit
+   ```
+
+2. 运行本目录的脚本：
+   ```
+   Z:\EFI\OC\RECOVERY\DISABLE-WIFI.bat
+   ```
+   它会找到所有 `EFI\OC\OpenCore.efi` 并把这些目录改名为 `.off`：
+   - MtkWlan.kext、MtkWlanNative.kext、MtkBt.kext、BlueToolFixup.kext、LegionBtFix.kext
+
+3. 重启进 macOS。此时系统能进，但没有 Wi-Fi / 蓝牙。
+
+4. 进系统后在 macOS 里运行（恢复上一条稳定版本并重新启用全部驱动）：
+   ```
+   bash /Users/links/mt7927-port/tools/restore-kexts.sh
+   ```
+   或直接让 macOS 侧的助手（你正在用的这个）处理：它会自动恢复 `.off` 目录、
+   用最新备份回滚 MtkWlan 并重新安装。
+
+## 回滚到上一个版本（不用进 macOS）
+
+1. 同上分配盘符。
+2. 运行：
+   ```
+   Z:\EFI\OC\RECOVERY\RESTORE-LAST.bat
+   ```
+   它会用最新的 `MtkWlan.kext.before-*` 备份替换当前 MtkWlan.kext。
+3. 如需更早版本：删除 `MtkWlan.kext`，把某个更早的 `MtkWlan.kext.before-*` 改名为
+   `MtkWlan.kext`。
+
+## 重要警告
+
+- **不要用 Windows 的文本编辑器重写 config.plist**（会导致格式损坏）。
+  禁用/恢复驱动只用上面的“改名”方式。
+- `CURRENT.txt` 里记录了本次安装的版本哈希、备份目录和时间戳，方便确认状态。
+- 所有改动都在 EFI\OC\Kexts\ 下，重命名是可逆的；`.off` / `.before-*` 目录不要删除。
+
+## 诊断信息（给助手看）
+
+进 macOS 后助手会自动调用 `tools/autotest.sh` 生成快照：
+`out/autotest/<时间戳>.txt`，包含驱动状态、连接、TXS、蓝牙等。
