@@ -15,6 +15,7 @@
 | 移植笔记 | `PORTING.md` | 逐项改动与 Linux 对照（含已知限制）|
 | 优化清单 | `OPTIMIZE-ROADMAP.md` | 完成项与待定项 |
 | 芯片能力分析 | `MT7927-CAPABILITIES.md` | MT7927/Wi-Fi7 规格、驱动现状、完善方案 |
+| 漫游/AWDL 分析 | `ROAM-AWDL-ANALYSIS.md` | 方案分析（暂未实施）|
 | 已构建产物 | `dist/` | kext + 固件（发布用）|
 
 > 三个 `WTLMtkWireless/` 等子目录为独立 git 仓库（本仓库对其跟踪说明）；
