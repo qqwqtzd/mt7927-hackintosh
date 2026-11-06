@@ -4,7 +4,7 @@
 Wi-Fi 7 + Bluetooth 5.4 支持。
 
 当前状态：**源码完成第一轮 bring-up，三个 kext 均可编译；MT7927 的 Wi-Fi PCIe 设备已出现
-（`14c3:7927`，subsystem `105b:e0fe`，PCI 9:0:0），但尚未加载驱动验证。**
+（`14c3:7927`，subsystem `105b:e0fe`）。**
 
 蓝牙 USB 半边也已通过 Windows 注册表确认存在：
 
@@ -14,10 +14,10 @@ LocationInformation = Port_#0017.Hub_#0004
 父控制器 = PCI 11:0:0 1022:43fc (AMD xHCI)
 ```
 
-主板是 MSI MPG B850M EDGE TI MAX WIFI。后置 4x10Gbps A、3x10Gbps C、4x5Gbps A，
+主板为 AMD 平台（M.2 E-key + 芯片组 USB），后置 4x10Gbps A、3x10Gbps C、4x5Gbps A，
 前置 2x5Gbps A、4xUSB2.0、1x20Gbps C，内部 Wi-Fi/BT。后置大部分端口走 Realtek
 RTS5429E / Genesys GL3523 / GL9905V，不在 `1022:43fc` 的 15 条 map 里；43fc 的 15 条
-是 B850 芯片组自己的 root ports，都是检测到的有效端口。蓝牙是第 16 个（port 17）。
+是芯片组自身的 root ports，都是检测到的有效端口。蓝牙在末位端口。
 
 移动硬盘（Ugreen，`0bda:9201`）接在前置 USB 3.0 A，macOS 显示在 43fc SS0005，
 由此确认：
@@ -26,12 +26,12 @@ RTS5429E / Genesys GL3523 / GL9905V，不在 `1022:43fc` 的 15 条 map 里；43
 - 前置 USB3.0 A = SS0005 + HS0005（另一个口是另一组 SS/HS）；
 - HS0006–HS0009（port 11–14）是 4 个前置 USB 2.0 header（机箱未接）；
 - HS0010（port 16）是 USB Audio；
-- port 15 是 MSI input，port 17 是蓝牙，原 map 都缺。
+- 个别机型的 input 设备与蓝牙端口，原 map 可能缺失。
 
 用户要求去掉全部 4 个前置 USB2.0（HS0006–HS0009，port 11–14），加入 15/17：
 
 - `dist/UTBMap-MT7927.kext`（13 条）：保留 SS 1–5、HS 1–5（USB3 配对）、HS 10（音频）；
-  加入 port 15（MSI input）+ port 17（蓝牙）；去掉全部 4 个前置 USB2.0。
+  加入缺失的 input/蓝牙端口；去掉无前置 USB2.0 的机型上多余的 4 个前端端口。
 - 13 条远低于 macOS 26 的 15 条上限；不再需要 16/17 条实验版。
 
 该版本补了 macOS Tahoe 的 `usb-port-number`，`port-count` 为 17。
@@ -211,15 +211,15 @@ cd ~/mt7927-port/WTLWifiMenu && NO_LINKCHECK=1 ./build.sh
 
 ## 7. MT7927 5GHz 验证（2026-11-06）
 
-成功关联 5GHz `Maintain`（ch36, VHT80, 2 streams, 866 Mbps）：
+成功关联 5GHz 测试网络（ch36, VHT80, 2 streams, 866 Mbps）：
 
 - `MtkState = "W6 pass: en1 passing traffic"`
-- `MtkTargetSsid = "Maintain"`，IP `192.0.2.112`
+- 测试网络关联成功，获得 DHCP 地址
 - `MtkRocRfBand = 2`、`MtkRocDbdcBand = 1`、`MtkRocCh = 36`
 - `MtkW9TxCh = 36`，`MtkW9Txd1` 低 32 位含 `TGID=1`（如 `0x800C9001` / QoS 帧 `0x800D9001`）
 - `MtkW2Sec`：m1/m2/m3/m4 全为 1
 - `MtkW6TxFailed = 0`、`MtkW6TxDrop = 0`、`MtkW6TxStall = 0`、`MtkW6TxRingFull = 0`
-- 实测 `ping -b en1 192.0.2.1`（1400 字节）0% 丢包；`curl --interface en1` 约 3 MB/s（与有线 en0 同量级）
+- 实测 `ping -b en1 <网关>`（1400 字节）0% 丢包；`curl --interface en1` 吞吐与有线同量级
 
 IPv6：`en1` 只有 link-local，`networksetup -getinfo "Wi-Fi"` 显示 `IPv6 Router: none`；
 `ping6 -I en1 ff02::1` 正常，说明 Wi-Fi 的 IPv6 二层没问题，是路由器未在该 SSID 下发 RA。
@@ -242,7 +242,7 @@ IPv6 定位（已找到根因）：
 
 - 5 分钟抓包：`en0` 收到路由器 RA（`xx:xx:xx:xx:xx:xx`，前缀 `xxxx:xxxx:xxxx:xxxx::/64`）；
   `en1` 收到 0 个 RA、0 个入站组播。
-- 从 `en0` 向 `192.168.31.255` 发广播 ping 后，`MtkW6RxTrans` 和 `MtkW2Sec` 的 `trans`
+- 从有线向子网广播地址发广播 ping 后，`MtkW6RxTrans` 和 `MtkW2Sec` 的 `trans`
   从 868 增到 873，正好等于广播包数。说明广播/组播**已经到达驱动**，但在 `rxFrame()`
   的 `HDR_TRANS`（RXD2 bit 7）分支里因为 `tgtRsn` 被当成“未解密”丢掉。
 - 修复：`HDR_TRANS` 帧在 `portOpen` 且硬件已解密（`decrypted`）时交给协议栈，
@@ -262,7 +262,7 @@ IPv6 定位（已找到根因）：
 显示层最终结论（2026-11-06，用户选择保持现状）：
 
 - 实际链路 `MtkW8Mode = HE, 80 MHz, 2 streams`，速率 1032 Mbps；扫描记录
-  `Maintain` 的 `physicalLayerMode = 64`（11AX）、`fastestSupportedPHYMode = 6`。
+  测试网络的 `physicalLayerMode = 64`（11AX）、`fastestSupportedPHYMode = 6`。
 - 但 `system_profiler` 的当前网络仍显示 `802.11ac`，`Supported PHY Modes` 仍为
   a/b/g/n/ac。CoreWiFi 的 `CWFInterface` 返回 `PHYMode = 128`（0x80/ac）、
   `supportedPHYModes = 159`（0x9F）、`maxPHYModeDescription = 11AC`。
@@ -285,8 +285,8 @@ IPv6 定位（已找到根因）：
 ## 10. W-08 实测结论（2026-11-06）
 
 - TX BA 窗口：`MtkTxBaWin` 可配置（Info.plist，默认 64，幂 2，16..256），host 测试覆盖钳制/ADDBA 参数。
-- 实测请求 128：AP（小米路由器）只授予 64，`MtkW9Ba win=64`；BA 窗口由 AP 上限决定，驱动侧调大无效。已回滚 64。
-- 内网质量实测：60×0.2s ping 192.0.2.1 avg 2.4ms / 0% loss / stddev 0.56ms。
+- 实测请求 128：AP 只授予 64，`MtkW9Ba win=64`；BA 窗口由 AP 上限决定，驱动侧调大无效。已回滚 64。
+- 内网质量实测：60×0.2s ping 网关 avg 2.4ms / 0% loss / stddev 0.56ms。
 - 观察项：`MtkW9Ba rx buffered>600, timeout>30` 在持续下载时出现，A-MPDU 重排压力偏大，
   若后续延迟类问题出现，先看此处。
 
@@ -294,7 +294,7 @@ IPv6 定位（已找到根因）：
 
 - 完整链路已就位并经 host 测试：DSCP/VLAN-PCP → TID → AC → LMAC 队列（RFC 8325 精简映射），
   `edca()` 记录 AP 的 WMM 元素（apWmm），仅当 `MtkWmm + apWmm` 时 QoS 帧按分类走对应队列。
-- 实测：`Maintain` AP 广播 WMM（apwmm 1），分流生效（`MtkW9Wmm` 统计），
+- 实测：路由器 AP 广播 WMM（apwmm 1），分流生效（`MtkW9Wmm` 统计），
   但当前全部流量 DSCP=0（tcpdump 采样确认），macOS 默认不标记，故全部落 BE（TID 0）。
 - 结论：与 Linux/macOS 原生一致——无标记→BE 是正确的；带 DSCP/PCP 的 VoIP/视频应用会自动分流。
   未做端口乱标（避免加剧延迟）。`MtkW9Wmm` 保留作诊断。
@@ -305,7 +305,7 @@ IPv6 定位（已找到根因）：
   bus master off (PCIe drops at sleep).
 - `setPowerState(1)`: `pmWake()` - bus master on, `reload("wake")` (drv_own -> hwStart
   incl. FLR -> hwInit -> auto rejoin), tick timer restarted.
-- 实测 2 次睡眠/唤醒：`MtkPmSleeps/Wakes=2`, `MtkPmWakeRc=0`, 自动回连 Maintain,
+- 实测 2 次睡眠/唤醒：`MtkPmSleeps/Wakes=2`, `MtkPmWakeRc=0`, 自动回连测试网络,
   `MtkW6TxFailed=0`, HE 80MHz 保持, BT ready。
 
 ## 13. S-3 / S-4（2026-11-06）
@@ -325,7 +325,7 @@ IPv6 定位（已找到根因）：
 - parseAp: VHT op width >= 3 or HE 160 cap + VHT bit14 -> 160; center 42/106/155.
 - assocIes advertises VHT 0x4000 + HE 160/RU; HE BW160 mcs map valid when negotiating.
 - rate/display: 160 rates (2x80), MtkW8Mode "160 MHz". MtkMaxBw accepts 3 (default 3).
-- 实测 Maintain (小米): HE 160MHz 2SS, 2064 Mbps negotiated, 1400B ping 0% loss
+- 实测：HE 160MHz 2SS, 2064 Mbps negotiated, 1400B ping 0% loss
   7.6ms, 30s download TxFailed=0, BA win 64 established.
 
 ## 16. B-1 A2DP / HCI logging（2026-11-06）
@@ -355,5 +355,5 @@ MT7927（MT6639）Wi-Fi + Bluetooth 在 macOS 26.7.2 上完整可用：
   tools/recovery/*（Windows 侧一键禁/恢复）、OPTIMIZE-ROADMAP.md（优化清单）。
 - 已知遗留：如 PHY 显示、WPA3-SAE、802.1X、漫游、6GHz 等，见 OPTIMIZE-ROADMAP.md 待定项。
 
-恢复预案（重要）：活动 OpenCore EFI 在 512GB SAMSUNG 盘（disk 编号会变，认容量/型号）；
-`EFI/OC/RECOVERY/` 里有 DISABLE-WIFI.bat / RESTORE-LAST.bat 及说明；每次安装自动同步。
+恢复预案（重要）：活动 OpenCore EFI 在以“含 EFI/OC/OpenCore.efi”识别的那块 ESP 上（磁盘编号每次开机可能变化，不要写死盘号）；
+该 ESP 的 `EFI/OC/RECOVERY/` 里有 DISABLE-WIFI.bat / RESTORE-LAST.bat 及说明；每次安装自动同步。

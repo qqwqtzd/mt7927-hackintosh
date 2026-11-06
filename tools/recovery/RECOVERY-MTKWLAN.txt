@@ -3,14 +3,14 @@
 如果 macOS 开机进不去系统（黑屏 / 反复重启 / 内核 panic），**首先怀疑最新安装的
 MtkWlan.kext**。本目录的两个 .bat 脚本可以在 Windows 下直接恢复，无需懂命令。
 
-## 先确定哪块盘：本机的 OpenCore EFI 在 512GB SSD 上
+## 先确定哪块盘：本机的 OpenCore EFI 在 你的 macOS 系统盘上（认"含 EFI\OC 目录的 314MB ESP"）
 
-`diskpart` 的 `list disk` 输出里，选择 **SAMSUNG MZVL4512HBLU-00BH1（512GB）** 那块
+`diskpart` 的 `list disk` 输出里，选择 **你的 macOS 系统盘** 那块
 （它含 314MB 的 NO NAME EFI 分区，macOS 装在 511.8GB APFS 分区）。不要选 2TB
 Windows 盘（那块只有 Boot/Microsoft，没有 EFI\OC）。
 
 注意：**disk 编号（Disk 0 / Disk 1 / Disk 2）在每次重启后会变**（macOS 会给两块
-NVMe 重新排序）。判断依据永远是 **容量 512GB + 型号 SAMSUNG**，不要记编号；
+NVMe 重新排序）。判断依据永远是 **找含 314MB "NO NAME" EFI 分区、且该 EFI 里有 EFI\OC 目录的那块盘**，不要记编号；
 openCore 一定在「含 314MB NO NAME EFI、且该 EFI 里有 EFI\OC 目录」的那块盘上，
 在 Windows 分配盘符后可以直接看 `Z:\EFI\OC\OpenCore.efi` 是否存在来确认。
 
@@ -20,7 +20,7 @@ openCore 一定在「含 314MB NO NAME EFI、且该 EFI 里有 EFI\OC 目录」�
    ```
    diskpart
    list disk
-   select disk <512GB SAMSUNG 那块的编号>
+   select disk <你的 macOS 系统盘编号>
    select partition 1
    assign letter=Z
    exit
@@ -37,7 +37,7 @@ openCore 一定在「含 314MB NO NAME EFI、且该 EFI 里有 EFI\OC 目录」�
 
 4. 进系统后在 macOS 里运行（恢复上一条稳定版本并重新启用全部驱动）：
    ```
-   bash /Users/links/mt7927-port/tools/restore-kexts.sh
+   bash tools/restore-kexts.sh
    ```
    或直接让 macOS 侧的助手（你正在用的这个）处理：它会自动恢复 `.off` 目录、
    用最新备份回滚 MtkWlan 并重新安装。

@@ -1,58 +1,101 @@
 # MediaTek MT7927 (Filogic 380 / MT6639) Wi-Fi + Bluetooth for macOS Hackintosh
 
-移植 Linux `mt76` / `btmtk` 的 MT7927 驱动到 macOS 26.2（Tahoe 26.7.2 / 25G332），
-在 AMD Hackintosh（MSI MPG B850M EDGE TI MAX WIFI）上经 OpenCore 加载，完整可用。
+在 macOS（Tahoe 26.x 实测 / 更高或相近版本可尝试）上驱动 MediaTek MT7927 / MT6639
+（AMD RZ717 及同类 M.2 Wi-Fi 6E 模块的对等芯片组）的内核扩展移植。目标：**任何
+使用该网卡的黑苹果用户都可以按本手册自行构建、安装、排障**。
 
-## 仓库结构
+本仓库是"总装工程"，包含：
 
-```
-mt7927-port/
-├── WTLMtkWireless/      Wi-Fi 驱动（kext，fork/移植自 watchthelight-labs）
-├── WTLMtkBluetooth/     Bluetooth 固件加载器（kext）
-├── WTLWifiMenu/         原生 Wi-Fi 前端（MtkWlanNative，iOS 的 IO80211 菜单）
-├── tools/               构建/安装/恢复/诊断脚本
-├── dist/                已构建 kext + 当前版本
-├── linux-ref/           Linux v7.2 mt76 参考源码（只读对照）
-├── third-party/         LegionBtFix / BlueToolFixup 等
-├── PORTING.md           移植细节与完整历史（逐项记的改动）
-├── INSTALL.md           安装步骤
-├── OPTIMIZE-ROADMAP.md  优化清单（完成/待定）
-├── USB-INVENTORY.md     USB 端口清单
-└── RECOVERY-MT7927.txt  恢复指引
-```
+| 组件 | 路径 | 说明 |
+|---|---|---|
+| Wi-Fi 驱动 | `WTLMtkWireless/` | 核心 kext（扫描/关联/WPA2/HE/Block-Ack/诊断）|
+| 原生前端 | `WTLWifiMenu/` | `MtkWlanNative.kext`：macOS 原生 Wi-Fi 菜单 |
+| 蓝牙加载器 | `WTLMtkBluetooth/` | `MtkBt.kext`：MT7925/MT7927 固件下载 |
+| 构建/安装/恢复 | `tools/` | 脚本化工作流（见下）|
+| 移植笔记 | `PORTING.md` | 逐项改动与 Linux 对照（含已知限制）|
+| 优化清单 | `OPTIMIZE-ROADMAP.md` | 完成项与待定项 |
+| 已构建产物 | `dist/` | kext + 固件（发布用）|
 
-三个子目录（`WTLMtkWireless` 等）是独立的 git 仓库（各有 origin），本仓库是它们的
-"总装/工程"包装，方便一次性 clone 全部相关资产。
+> 三个 `WTLMtkWireless/` 等子目录为独立 git 仓库（本仓库对其跟踪说明）；
+> 未来上游更新可在各自目录内 fetch。
 
-## 状态（2026-11-06）
+## 硬件前提
 
-- **Wi-Fi**：2.4/5GHz，WPA2，IPv6，802.11ax HE **160MHz**（协商 2064 Mbps），TXS 遥测，
-  WMM 多队列，固件卡死自动恢复，断线自动重连，睡眠/唤醒驱动重建。
-- **原生前端**：Wi-Fi 菜单、macOS 自动 join、private MAC。
-- **蓝牙**：AirPods 音频稳定（HCI logging 已确认非必需并移除）。
-- 详见 `PORTING.md` 第 16 节"当前最终状态"。
+- 网卡：MediaTek MT7927 或兼容 MT6639 的模块（AMD 主板常见的 RZ717，PCIe 设备
+  `14C3:7927` / `14C3:6639` / `14C3:0738`）
+- 系统：macOS Tahoe 26.7.1 (25G241) / 26.7.2 (25G332)（`MtkWlanNative` 对 build 有
+  ABI 校验；其它 macOS 版本可用 Ethernet 前端降级使用）
+- 引导：OpenCore
 
-## 构建
+## 快速开始
 
-```
+```bash
+# 1) 构建三个 kext
 bash WTLMtkWireless/tools/build-mac.sh      # out/MtkWlan.kext
 bash WTLWifiMenu/build.sh                    # out/MtkWlanNative.kext
 bash WTLMtkBluetooth/tools/build-mac.sh      # out/MtkBt.kext
-bash WTLMtkWireless/tests/run.sh             # host 测试（5 组）
+
+# 2) host 测试（不重启，先自检）
+bash WTLMtkWireless/tests/run.sh
+
+# 3) 安装到 OpenCore EFI（自动识别带 OpenCore 的分区，自动备份，自动同步恢复工具包）
+sudo bash tools/install-efi.sh
+
+# 4) 在 config.plist 的 NVRAM/Add 的 7C436110-AB2A-4BBB-A880-FE41995C9F82 里加 boot-args：
+#    mtkfe=native mtknativeif=1
+#    （Kernel/Add 里按顺序加：Lilu(如需要) -> BlueToolFixup -> LegionBtFix -> MtkBt -> MtkWlan -> MtkWlanNative）
 ```
 
-## 安装 / 恢复
+## 功能与实测结果
 
-```
-sudo bash tools/install-efi.sh      # 装到带 OpenCore 的 EFI（自动备份+同步恢复包）
-sudo bash tools/autotest.sh         # 开机自动采集诊断快照 → out/autotest/
+- 2.4GHz / 5GHz 关联，WPA2-Personal
+- 802.11ax/HE（含 160MHz，实测协商 2064 Mbps 级别），IPv6
+- TXS 速率遥测、WMM 多队列（标准行为）、RX 重排诊断
+- 固件卡死自动恢复、断线自动重连、睡眠/唤醒驱动重建
+- 原生 Wi-Fi 菜单（需 `MtkWlanNative` + 正确 ABI build）
+- 蓝牙：AirPods 音频稳定（HCI logging 已确认非必需），LE/经典设备
+  （需配套 `BlueToolFixup.kext` + `WTLLegionBtFix`）
+
+> "PHY Mode 显示 802.11ac" 是 CoreWiFi 显示层问题（实际为 HE），不影响功能，见 PORTING.md。
+
+## 日常排障 / 诊断（不重启也能做）
+
+```bash
+# 盯一个属性
+ioreg -r -c MtkWlan -l -w0 | grep -E 'MtkState|MtkW8Mode|MtkW6TxFailed'
+
+# 开机自动采集诊断快照（想免手工就装一下）
+sudo bash tools/autotest.sh                 # 手动跑一次
+#   或安装 LaunchAgent（替换 plist 里 REPO 路径）：
+#   cp tools/com.mtkwlan.autotest.plist ~/Library/LaunchAgents/
+#   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.mtkwlan.autotest.plist
+
+# 恢复：macOS 侧
+sudo bash tools/restore-kexts.sh            # 回滚 MtkWlan 到上一稳定版 + 重启用被禁 kext
 ```
 
-活动 OpenCore EFI 在 **512GB SAMSUNG（MZVL4512HBLU-00BH1）** 盘上（disk 编号会变，
-认容量/型号）。EFI 内 `EFI/OC/RECOVERY/` 有 Windows 侧一键禁用/回滚脚本。
-详见 `PORTING.md` / `INSTALL.md` / `tools/recovery/`。
+## 恢复方案（重要）
+
+- OpenCore EFI 挂载后：`EFI/OC/RECOVERY/` 内含 **Windows 侧**一键脚本
+  （`DISABLE-WIFI.bat` 禁用 5 个 kext 保开机，`RESTORE-LAST.bat` 回滚 MtkWlan）
+  及 `RECOVERY-MTKWLAN.txt` 说明。
+- 每次 `tools/install-efi.sh` 都会同步恢复工具包 + `*.before-*` 备份到 EFI。
+- macOS 侧 `tools/restore-kexts.sh` 一键恢复。
+
+## 已知限制
+
+- WPA3-SAE / 802.1X 企业网 / 漫游(802.11k/v/r) / 6GHz / AWDL(隔空投送) 未实现（见 OPTIMIZE-ROADMAP.md）
+- 驱动二进制随 EFI 更新，修改代码后需重启生效（macOS kext 机制）
+- `MtkWlanNative` 只接受指定 macOS build（ABI 校验），其它 build 请用 Ethernet 前端
+
+## AI 协作指南
+
+给 AI 助手（如 DeepSeek / Claude / ChatGPT）使用本项目的提示词模板、调试流程、安全须知，
+见 **[AI-GUIDE.md](AI-GUIDE.md)**。
 
 ## 许可
 
-见各子仓库的 LICENSE / NOTICE / LICENSES（ISC / Clear BSD / GPL 兼容声明），
-以及 `LICENSES/LICENCE.mediatek`（MediaTek 固件）。
+- 核心代码：ISC（部分文件 Clear BSD / GPL 兼容声明，见各子仓库 `NOTICE.md` / `LICENSE`）
+- Linux mt76 / btmtk 参考：ISC / BSD-3-Clause-Clear
+- MediaTek 固件：MediaTek 许可（`LICENSES/LICENCE.mediatek`）
+- 分发二进制时保留 LICENSE / NOTICE / LICENSES

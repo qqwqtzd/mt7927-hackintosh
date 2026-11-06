@@ -3,10 +3,10 @@
 # Nothing is copied to EFI, so a reboot removes the driver and a panic (worst case) is recoverable
 # by simply booting again. Run with:
 #
-#   sudo bash /Users/links/mt7927-port/test-live.sh
+#   sudo bash 20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400cd "20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400dirname "-e")" && pwd)/test-live.sh
 #
 set -u
-ROOT="/Users/links/mt7927-port"
+ROOT="20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400cd "20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400dirname "-e")" && pwd)"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "run with: sudo bash $0"

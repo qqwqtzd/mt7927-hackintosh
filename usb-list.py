@@ -3,7 +3,7 @@
 
 Run after plugging a device into a physical port to see which controller/port it lands on:
 
-    python3 /Users/links/mt7927-port/usb-list.py
+    python3 usb-list.py
 
 No sudo needed; read-only.
 """

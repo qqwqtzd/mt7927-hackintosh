@@ -1,12 +1,12 @@
 #!/bin/bash
 # Install the MT7927 UTBMap into the active OpenCore EFI (disk0s1).
 # Run as root, e.g. via:
-#   osascript -e 'do shell script "bash /Users/links/mt7927-port/install-efi-map.sh" with administrator privileges'
+#   osascript -e 'do shell script "bash 20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400cd "20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400dirname "-e")" && pwd)/install-efi-map.sh" with administrator privileges'
 set -euo pipefail
 
 EFI="/Volumes/NO NAME 1/EFI/OC"
 KEXTS="$EFI/Kexts"
-SRC="/Users/links/mt7927-port/dist/UTBMap-MT7927.kext"
+SRC="20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400cd "20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400dirname "-e")" && pwd)/dist/UTBMap-MT7927.kext"
 STAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP="$KEXTS/UTBMap.kext.before-mt7927-$STAMP"
 

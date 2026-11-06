@@ -4,7 +4,7 @@
 <dict>
     <key>Label</key><string>com.mtkwlan.autotest</string>
     <key>ProgramArguments</key>
-    <array><string>/Users/links/mt7927-port/tools/autotest.sh</string></array>
+    <array><string>${REPO:-/path/to/mt7927-port}/tools/autotest.sh</string></array>
     <key>RunAtLoad</key><true/>
     <key>StartInterval</key><integer>300</integer>
     <key>StandardOutPath</key><string>/tmp/mtkwlan-autotest.log</string>

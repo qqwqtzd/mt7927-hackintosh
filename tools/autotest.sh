@@ -1,5 +1,6 @@
 #!/bin/bash
-# autotest.sh: after a reboot, collect the Wi-Fi/BT diagnostic snapshot automatically.
+# autotest.sh: 开机自动采集 Wi-Fi/BT 诊断快照
+# ROUTER 环境变量可覆盖默认网关（用于触发流量采样）: after a reboot, collect the Wi-Fi/BT diagnostic snapshot automatically.
 # Designed for unattended iterations: boot -> LaunchDaemon or manual run -> the
 # snapshot lands in out/autotest/<stamp>.txt and the assistant reads it directly.
 # Usage: sudo tools/autotest.sh   (writes to <repo>/out/autotest/, root-owned dir)
@@ -27,7 +28,7 @@ fi
 sleep 3
 
 # force a little traffic so TXS helpers have data to show
-( curl --noproxy '*' --interface en1 -sS -m 5 -o /dev/null http://192.0.2.1/ 2>/dev/null; true ) &
+( curl --noproxy '*' --interface en1 -sS -m 5 -o /dev/null http://\${ROUTER:-192.0.2.1}/ 2>/dev/null; true ) &
 
 echo "=== MtkWlan state ==="
 ioreg -r -c MtkWlan -l -w0 2>/dev/null | grep -E 'MtkState|MtkTargetSsid|MtkW8Mode|MtkW8He|MtkW6TxFailed|MtkW6TxPackets|MtkW6RxPackets|MtkW6Link|MtkW2Sec|MtkW9Txs|MtkW9TxsLast|MtkW9TxFree|MtkW9Ba|MtkStall|MtkIRQ|MtkIrq' | head -40

@@ -1,7 +1,7 @@
 #!/bin/bash
 # restore-kexts.sh: undo a Windows-side DISABLE-WIFI.bat and roll MtkWlan back to
 # the newest before-* backup when one exists. Run with sudo on the Mac.
-# Usage: sudo bash /Users/links/mt7927-port/tools/restore-kexts.sh
+# Usage: sudo bash tools/restore-kexts.sh
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/.." && pwd)

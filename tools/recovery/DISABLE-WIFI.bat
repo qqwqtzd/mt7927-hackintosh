@@ -44,7 +44,7 @@ for %%K in (MtkWlan MtkWlanNative MtkBt BlueToolFixup LegionBtFix) do (
 if "%DONE%"=="1" (
     echo.
     echo All WiFi/BT kexts are now disabled. The Mac will boot without WiFi/BT.
-    echo After the boot, in macOS run:  bash /Users/links/mt7927-port/tools/restore-kexts.sh
+    echo After the boot, in macOS run:  bash tools/restore-kexts.sh
     echo (or ask the assistant to restore the previous build).
 ) else (
     echo Nothing to disable - all were already off.
