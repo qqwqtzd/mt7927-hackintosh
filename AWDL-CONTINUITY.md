@@ -99,3 +99,38 @@ macOS 的 AWDL 由 **IO80211Family 系统栈垄断**，AirDrop 走系统 UI/分�
 ---
 
 *最后更新：2026-11-07。本文仅为研究与判定，未实施。*
+
+---
+
+## 七、IO80211Family AWDL 契约逆向（第一阶段，2026-11-07）
+
+使用 **rea (Reverse Engineer Anything) + Ghidra 12.1.4** 对 IO80211Family(1200.13.1)
+（从 BootKernelExtensions.kc 提取）完成全量导入分析：12,341 函数、176,463 字符串。
+
+### 关键发现
+
+1. **AWDL 协议栈完全在系统 IO80211Family 内部**：`IO80211AWDLPeerManager`（选举/信道时序/
+   duty cycle/流量登记）、`IO80211AWDLPeer`、`IO80211NANPeer`、`IO80211AWDLProtocol`,
+   以及 AirDrop/SideCar/FaceTime/CarPlay 的 `handle*TrafficReg` 全是系统栈实现。
+   `apple80211get/setAWDL_*` handler 只是**薄包装**：经接口 vtable（槽 0xcc8 门 / 0x10d0 派发）
+   把`apple80211_awdl_* `结构转给核心。
+2. **驱动契约 = 35 get + 35 set 共 70 个 `apple80211get/setAWDL_*` skywalk ioctl**（完整清单
+   记于对应 REA 会话 notes）。这是第三方驱动要响应才能被系统视为"支持 AWDL"的接口面，
+   **也是 MtkWlanNative 被拒直方图（0x0161 家族）的根本来源**。
+3. **信道分时由系统栈调度**：`awdlDutyCycle` / `updateAwdlChanSeq` /
+   `setAwdlChannelSequence` / `dynSdbStateMachine` 均在 PeerManager 内完成；
+   驱动只需执行（切信道、设 sync frame 模板、收发、给 peer 建 BA/sta）。
+4. **awdl0 虚拟接口**通过 `IO80211VirtualInterface`（postAwdlStatistics / setInterfaceCCA）
+   家族创建与维护；第三方 skywalk 客户端需在 IO80211Family 认可的控制器路径上注册。
+
+### 工作量重估（相对此前"自研协议"降档）
+
+| 项 | 需要 | 难度 |
+|---|---|---|
+| 实现 70 个 AWDL ioctl handler | 把 apple80211_awdl_* 缓冲转发给驱动核心（多为薄转发）| 中（量大但机械）|
+| 驱动核心芯片能力 | 多接口/虚 BSSID、按序列切信道、收发 sync frame、给 AWDL peer 建硬件 BA/STA 记录（呼应 mt7927-airdrop 的 awdl_rx_ba）| 中高 |
+| AWDL 协议状态机 | **无需实现**（系统栈全包）| — |
+
+> 与 mt7927-airdrop(Linux) 的关键差异确认：**macOS 上协议在系统栈**，不做自研 OWL；
+> 但芯片级手段（固件 RX BA / STA 记录 / 隐藏 AP 承载）两边一致，MT7927 硬件可行已由
+> 该 Linux 项目证实。逆向材料（70 ioctl + PeerManager) 使我方"实现驱动接口面"路线明确。
