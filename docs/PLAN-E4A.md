@@ -76,3 +76,10 @@ ACTIVE 必须**只含 0x100**，否则仍显示 ac（M5 报告 §2.1 实证）�
      `bash /Volumes/EFI0/phyfix-restore/restore.sh` → 回主盘重启。
   3) 连 U 盘也没 → OpenCore 启动选择器选 Recovery → 终端挂载 EFI → 同 2 的脚本。
 - Debug 位：现有 boot-args 含 `-v debug=0x100 keepsyms=1`（panic 时可见、留日志）。
+
+## 10. 盘序漂移教训（2026-11-07）
+- macOS BSD 盘号按 IOMedia 枚举，非 SATA 端口固定；USB 盘插入/启动介质会整体重排（disk0↔disk1
+  互换实测发生）。OpenCore 引导按卷 UUID 不受影响；人肉/脚本"按盘号"操作是坑源。
+- 规则：一切 EFI/盘操作使用 `REV/tools/oc-esp.sh`（按 EFI/OC/OpenCore.efi 内容探测）或 UUID
+  （OC-ESP PART UUID=ABD015F6-F7EE-4E3A-80D7-3102ECE4BCF8）；不写死 /dev/diskXsY。
+- 误写记录：曾有操作命中 2TB 盘 Windows ESP（disk0s1=当前枚举），未造成实质破坏（结构原样）。
