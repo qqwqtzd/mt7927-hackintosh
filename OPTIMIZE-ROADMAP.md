@@ -1,75 +1,92 @@
-# MT7927 驱动优化清单（2026-11-07 更新）
+# MT7927 驱动项目总览与最终路线（OPTIMIZE-ROADMAP.md）
 
-> 状态：稳定类（S 系列）已批准执行；其余待定。
-> 勾选方式：把 `[ ]` 改成 `[x]`。
+> 项目状态：**功能完备、系统稳定、文档归档、GitHub 已同步**（截至 2026-11-07）。
+> 本文件是项目**总进度与决策簿**：已完成 / 已判定 / 待触发 / 剩余可选，一目了然。
 
-## 当前已完成（不再重复）
+## 一、当前状态总览
 
-- Wi-Fi 2.4/5G + HE 80MHz + WPA2 + IPv6
-- TXS 遥测（host 测试覆盖）
-- BA 窗口调优（实测 AP 上限 64，按默认收尾）
-- WMM 多队列（标准行为：无 DSCP → BE）
-- 原生前端 MtkWlanNative
-- 蓝牙全套（MtkBt + Fixup + LegionBtFix）
-- 恢复工具包（每次装 EFI 自动同步，Windows 侧 DISABLE/RESTORE）
-- host 测试套件（WPA2/TXS/BA/WMM/supervisor）
-- **Wi-Fi 漫游（多 AP 选强）** ✅ 见 F-2（RSSI 选强，默认常开，非 802.11r 无缝）
+| 维度 | 状态 |
+|---|---|
+| Wi-Fi | ✅ 2.4/5GHz + HE 160MHz（协商 2064Mbps）+ WPA2 + IPv6，`W6 pass` 稳定 |
+| 蓝牙 | ✅ AirPods A2DP（无 HCI logging 依赖）、LE/经典设备，`ready` |
+| 漫游 | ✅ 自研 RSSI 漫游上线并调参（多 AP 实测切换）；系统 profile 联动已接线（待系统触发）|
+| 系统接口 | ✅ 25+ 个 apple80211 命令应答，`MtkNativeRejected` 6200+ → 0（仅余 0x100 单次）|
+| 恢复/诊断 | ✅ EFI 自动备份 + Windows 侧一键恢复；`tools/diag.sh` 一键诊断包 |
+| 工具链 | ✅ REA + Ghidra 逆向栈（IO80211Family 全量映射 361 探针码已存档）|
+| 发布 | ✅ 文档全套归档；GitHub 4 仓库已推送（本地=远端）|
+
+## 二、已实现并验证（按域）
+
+### 核心功能
+- [x] 2.4/5GHz 关联，WPA2-Personal，HE(11ax) 80/160MHz（P-1：实测 2064Mbps 2SS 0 丢包）
+- [x] IPv6（HDR_TRANS 组播修复）
+- [x] TXS 速率遥测、WMM 多队列、RX 重排诊断（MtkW9* 属性）
+- [x] 原生前端 MtkWlanNative（菜单/原生 Wi-Fi 栈接入）
+
+### 稳定性（S）
+- [x] S-1 睡眠/唤醒（wakeRc=0 自动回连）
+- [x] S-2 固件卡死自恢复 / S-3 断线自动重连 / S-4 RX 压力（健康）
+- [x] S-5 蓝牙 warm path（冷启 3.7s 一次过，无需优化）
+
+### 漫游（F-2，重点交付）
+- [x] 自研 **RSSI 选强漫游**（多 AP 同 SSID，默认开）
+  - 调参：`MtkRoamDelta 12→8`（对齐 AC `roaming_dif=8`）、绝对阈值 `-80/-75`（镜像 AC）、
+    3dB 窗口 HE 优先、`MtkW5RoamEvals` 诊断发布；实测切换正常（MtkW5Roam+2）
+- [x] **系统漫游档案联动（#4）**：`setROAM_PROFILE` 解析（band_data trigger/delta）→ 推送
+  `MtkRoamAdvise` → 核心 `applyRoamAdvise` 应用（一次性消费；待 airportd 触发后生效）
+
+### 蓝牙（B）
+- [x] B-1 A2DP 稳定；B-5 warm path
+- [x] BTCOEX 系应答（get/set PROFILE/ACTIVE/2G_CHAIN/EXT accept + version）——共存接收端就位
+
+### 系统接口 / 逆向（E）
+- [x] E-5 通用命令应答：18 探针放行 + 实现 getNSS / getCHANNELS_INFO / setPM_MODE / setROAM_PROFILE /
+      setWCL_ROAM_PROFILE_CONFIG / BTCOEX 系 / BEACON_INFO / BSS_BLACKLIST / TXRX_CHAIN_INFO /
+      SLOW_WIFI / FW_HOT_CHANNELS（11/get：version 应答；set：accept）
+- [x] E-6 IO80211Family 全 vtable 映射库：361 探针码 ↔ apple80211 命令名（REA/Ghidra）
+- [x] 0xcc8 探针法 / 槽位定位法 / buffer 大小从 Family 调用点取（工程方法沉淀）
+
+### 工程 / 文档 / 发布
+- [x] E-2 `tools/diag.sh` 一键诊断包；`VERIFY-MATRIX.md` 验收矩阵
+- [x] E-3 `UPSTREAM/` 可回馈补丁集（roam-* 4 + cmd-* 2，ISC；注明不可入 GPL-2.0 itlwm）
+- [x] 文档全套：README（通用手册）、INSTALL、PORTING、AI-GUIDE、ROAM-AWDL-ANALYSIS、
+      AWDL-CONTINUITY、MT7927-CAPABILITIES、IO80211-REV-NOTES、REVERSE-PATH-ANALYSIS
+- [x] GitHub：qqwqtzd/{mt7927-hackintosh, WTLMtkWireless, WTLWifiMenu, WTLMtkBluetooth} main 全同步
+
+## 三、已调研判定（不再投入）
+
+| 项 | 判定 | 依据 |
+|---|---|---|
+| **AWDL / AirDrop 传输** | ❌ 封死 | 系统能力 gate 在驱动不可达路径；系统从不发起 AWDL 命令（0 次）；rapportd 走 AWDL 降级（实测）|
+| **E-4 显示 802.11ax** | ❌ 系统残缺 | CoreWiFi/IO80211.framework 用户态**不存在**（精简构建），显示判定无人读；驱动能力字已尽力 |
+| **BT 共存闭环** | ⚠️ 部分 | bluetoothd UCM 引擎愿推，但 WCM 服务本机缺失 → 内容推不到驱动；驱动 BTCOEX accept 已就位 |
+| WPA3-SAE / 802.1X | ❌ 不做 | 家用 WPA2 够用；密码学数月 / 不适用（用户决策）|
+| 6GHz / 6E | ❌ 不做 | 中国大陆未开放（监管）|
+| 802.11r 无缝 FT | ❌ 不做 | 固件+macOS 无 FT 路径（分析过）|
+| LE Audio | ❌ 低优先 | 全栈系统支持，驱动不可及 |
+
+## 四、待触发 / 观察项（无动作）
+
+- **#4 漫游档案联动**：系统（airportd）下发 ROAM_PROFILE 即自动应用（待系统触发场景：多 AP 网络管理/漫游模式配置/电源切换等）
+- **BTCOEX 生效**：WCM 一旦存在（系统组件补全）既有接收端
+- **漫游长期行为**：观察 MtkW5Roam/MtkW5RoamEvals 1-2 天（diag.sh 随时可采）
+
+## 五、剩余可选（按性价比，供未来决定）
+
+| # | 项 | 投入 | 备注 |
+|---|---|---|---|
+| 1 | 0x100 放行（getMAX_NSS? 未精确映射）| 1 次编译+重启 | 洁癖项：Rejected 恰好归零 |
+| 2 | 认证增强（PMKID/FT 辅助）| 中 | IO80211 槽，无用户态依赖，完善性收益 |
+| 3 | P-2 多 TX 队列 | 高 | 吞吐盲区，风险高，需先做基准测试 |
+| 4 | P-3/P-4 checksum/ring | 低 | 校验级 |
+| 5 | F-6 弱信号/省电 | 中 | 台式收益低 |
+| 6 | B-2 多设备并发 | 中高 | AirPods 已稳，价值一般 |
+
+## 六、方法沉淀（可复用）
+
+- 逆向三件套：REA + Ghidra 12.1.4（11.3.2 补 mac decompiler）+ 本机 IO80211Family 全量映射
+- 半自动化：`tools/kcabi/`（dump→genhdr→datas）+ diag.sh + VERIFY-MATRIX
+- 原则：逆向只用于理解契约，能力机关在驱动/kext 侧满足；不修改系统服务二进制
 
 ---
-
-## 一、稳定性类（✅ 已批准执行）
-
-- [x] S-1 **睡眠/唤醒支持** ✅ 实测通过（2 次睡眠/唤醒，wakeRc=0）：合盖 sleep → 唤醒后 Wi-Fi/BT 自动恢复
-      （现状：setPowerState 仅应答；唤醒后可能掉网）收益高，风险中高，2–4 次重启
-- [x] S-2 **固件卡死自恢复** ✅ 验证通过
-- [x] S-3 **断线自动重连覆盖** ✅ 验证通过：AP 重启/换信道/弱信号自动回连
-      （已有基础，补 roaming 类场景）收益中，风险低，1 次重启
-- [x] S-4 **RX 重排压力观察** ✅ 实测：hwm 45/64 健康，无需优化
-- [x] S-5 **蓝牙 warm path 提速** ✅ 实测无需：冷启动 3.7s 一次通过，warm path 已复用 section（sectionsSkipped 机制）
-
-## 二、性能类（待定）
-
-- [x] P-1 **160MHz HE** ✅ 实测协商 2064 Mbps（HE 160MHz 2SS），链路 0 丢包稳定
-- [ ] P-2 **多 TX 队列/CPU 亲和**：数据按 2–4 个 DMA 环分流
-      收益中，风险高（动数据面），2–3 次重启
-- [ ] P-3 **Checksum/TSO 校验**：IPv6 大包/分片专项验证 收益低，风险低，1 次重启
-- [ ] P-4 **内存/ring 调优**：TX ring 1024、BA 参数复核 收益低，风险低，1 次重启
-
-## 三、功能类（待定）
-
-- [ ] F-1 **802.1X 企业网** —— 家用不适用，**不做**
-- [x] F-2 **Wi-Fi 漫游（多 AP 选强）** ✅ 实测触发（MtkW5Roam +2，链路稳定）：多台同 SSID 时自动切到更强的 AP
-  - 2026-11-07 调参：MtkRoamDelta 12→8（对齐 AC roaming_dif）、绝对阈值 -80/-75（MtkRoamAbsRssi*）、
-    3dB 窗口 HE 优先（MtkRoamPreferHe）、发布 MtkW5RoamEvals 诊断
-      （实现为 **RSSI 选强漫游**，默认常开 MtkRoam；**非** 802.11r 无缝 FT——MT7925/27 固件+macOS 无 FT 路径，见分析文档）收益中高，风险中，1 次重启
-- [ ] F-3 **WPA3-SAE + PMF** —— 家用 WPA2 已够，**不做**（密码学+P-256，数月）
-- [ ] F-4 **6GHz / Wi-Fi 6E** —— 中国大陆不开放，**不做**（监管不允许）
-- [ ] F-5 **AWDL/AirDrop/Handoff/互通** 收益高，风险极高（Apple 私有协议）
-- [ ] F-6 **弱信号/省电模式**（PS、WMM-PS 空口行为）收益中，风险中，2 次重启
-
-## 四、蓝牙专项（待定）
-
-- [x] B-1 **A2DP 稳定 & 去掉 HCI logging 依赖** ✅ 实测：全关 logging 后看视频 5 分钟稳定，workaround 已移除
-- [ ] B-2 **LE Audio / 多设备并发**优化 收益中，风险中高，2 次重启
-- [ ] B-3 **BT/Wi-Fi 2.4G 共存调优** 收益中，风险中，2 次重启
-
-## 五、通用命令补齐（2026-11-07，逆向驱动）
-- [x] **E-5 通用 apple80211 命令应答** ✅ 探针放行 18 码 + 实现 getNSS/getCHANNELS_INFO/
-      setPM_MODE/setROAM_PROFILE/...，MtkNativeRejected 从 6200+→0
-- [x] **E-6 命令–槽位映射库**：IO80211Family 全 vtable 探针清单（361 码）与 apple80211 命令名
-      已存档（REA/Ghidra；配合 AI-GUIDE/VOERIFY 矩阵）
-
-## 六、工程化/收尾（待定）
-
-- [ ] E-1 **测试矩阵文档化**：把每版验证项写进 PORTING.md 收益低，风险低
-- [x] E-2 **诊断一键包** ✅ tools/diag.sh 一键打包（ioreg 全量/日志/网络/蓝牙/pmset，15 文件 zip）
-- [ ] E-3 **上游同步**：整理可提交/可分享的 patch 集 收益中，风险低
-- [ ] E-4 **PHY Mode 显示 802.11ax**（显示层，已试未果，需 CoreWiFi 通道）收益低，风险高，不建议
-
----
-
-## 建议优先级
-
-- 短期最值：E-2 诊断包、E-1 测试矩阵、A-3 测试门禁（纯脚本零风险）
-- 中期可选：P-3/P-4（低风险校验）、E-3 上游同步
-- 不建议现在：F-3/F-4/F-5（月级工程）、E-4（已试失败）、F-1（已排除）、802.11r 无缝（见 F-2 说明）
+*2026-11-07 最终整理。项目处于稳定驻留点：功能齐备、可日常使用、可继续开发、可分享。*
