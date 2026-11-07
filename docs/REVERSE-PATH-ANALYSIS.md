@@ -159,3 +159,11 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
   sharingd 广播不自宣剪贴板能力（flagCopyPasteKey=0）→ 上传永不触发。
 - **不装第三方前提下 Mac→iPhone 剪贴板不可修**；iPhone/M5→Mac 正常。
 - 原生替代：备忘录 / iCloud 云盘 / 共享相簿（零第三方）。
+
+## 十三、InstallAssistant-26.7.2.pkg 评估与 WCM 修正（2026-11-07）
+
+- 安装包（17GB）为**软件更新型 asset 仓库**（SharedSupport.dmg + 16MB Payload；zip 分块为
+  ramdisk/固件类），**不含完整系统组件实体**（非 IESD），对"实体逆向"无直接贡献 → 记录评估结论。
+- 但引出修正：本机 dyld cache 含 `WirelessCoexManager` 镜像（主文件+分片），磁盘 stub 为正常结构；
+  `bluetoothd Server.MacCoex` 持续上报 `isCoexDenied=0` → **BT/WiFi 共存通告在工作**，
+  "WCM 缺失"不再成立；该项从"不可修"改为"无需修"。
