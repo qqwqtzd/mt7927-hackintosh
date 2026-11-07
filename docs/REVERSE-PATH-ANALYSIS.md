@@ -140,3 +140,14 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
   - 根因：Apple 私域蓝牙广播的剪贴板能力标志需蓝牙栈专门支持（固件/HCI 私域广告特性）；
     桥能"发现"但无法"宣告"→ Bluetooth 栈能力层结构性缺失（同族：无 AWDL/无 SE 键）。
 - 替代：微信/文件/网盘；iPhone→Mac 单向可用。
+
+## 十二、剪贴板广播层实锤 + 第三方兜底（2026-11-07 终）
+
+- bluetoothd 日志：本机**确在发送 Apple 私域广告**（sharingd 发起：
+  `Server.LE.Advertise ... manufacturer data [0B FF 4C 00 10 06 40 1D CB 9C A9 28]`），
+  但载荷 flags `0x40` 仅为发现标志，**无 Copy/Paste 能力位** → 与对端见到的
+  `flagCopyPasteKey=0` 一致。该位由系统（sharingd 组装、依据 Apple 芯片能力）决定，
+  **非桥/驱动可设** → 结构性不可修（BT 广播能力在 Apple 芯片侧判定）。
+- **第三方兜底（可用替代）**：LocalSend（localsend.org，macOS+iOS 免费/开源/局域网直连，
+  双向文字/图片剪贴板+文件）；备选 CrossPaste、柠檬 Push。均为局域网 TCP，不依赖
+  Apple Continuity 链路，与本机 AWDL/AKS 缺位无关。
