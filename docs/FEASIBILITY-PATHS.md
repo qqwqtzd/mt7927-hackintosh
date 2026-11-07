@@ -199,3 +199,14 @@ Apple 私域广播载荷的"剪贴板能力"位由系统组装；对端看到 0�
   三轮实验证据）。E-4 全书关闭：网络行已对，当前行结构性。
 - W1 工作簿首份结论：EXTENDED_BSS_INFO（我们答 0xcc/0xd4 map + rate set + RSN）→ 家族
   扫描记录 PHY 判定 ← 我们全权可控（已验证生效）；无需再改扫描侧。
+
+## 12. W1 漫游链收官：自适应漫游=系统静默行为（2026-11-07，两机对照）
+- 反编译：WCLAdaptiveRoam（0x236fe38 init，键 wlan.adaptiveroaming.enabled 默认 1；
+  stopAdaptiveRoam 理由 = "invalid rssi trigger"/"link down"；RSSI 阈值默认 -74dBm，
+  LQM offset 机制）。
+- 本机计数器实证：家族请求 setROAM_PROFILE(0xd8)×1 + setWCL_ROAM_PROFILE_CONFIG(0x1ae)×2
+  → 我们的漫游调参（MtkRoamDelta/ext/abs）确在被消费；BSS_INFO×1660 管线活跃。
+- M5 真机 3 天日志：adaptiveroam 仅 3 行类注册，零事件活动 → **自适应漫游在正常家用场景
+  两机皆静默**；"advise 从不触发"= 系统设计行为（同 WCM 模式），非 Hackintosh 缺陷。
+- W1 全部收官：扫描记录支路=驱动侧可控且已生效（d23f0dd in-ship）；漫游链=调参消费实证+
+  advise 静默符合系统设计；无需（也不值得）再重启实验。
