@@ -100,3 +100,16 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
   系统按不支持回退 ac。与 AWDL/WCM 同为"系统判定路径对第三方驱动不可达"，驱动侧无解；标注为接受项。
 - M5（macOS 27.2 arm64）对照：原生显示 ax + 160MHz，驱动为 DriverKit `AppleCentauriAlpha`。
 - 结论更新：**E-4 修正**——初期"CoreWiFi 缺失"判错（实现在 dyld cache）；实际为第三方驱动无法接入其判定服务。
+
+## 九、剩余需求 × 逆向方案重估（2026-11-07 晚，含 M5 逆向）
+
+| # | 需求 | 原判定 | 本机/M5 逆向新证据 | 重估 |
+|---|---|---|---|---|
+| 1 | **E-4 PHY Mode 显示 ax** | 不可达（NoneProtocol 服务缺失）| 本机 IO80211Family 具备 `IO80211NoneProtocol` 元类（gMetaClass 在 getPHY_MODE 包装引用）；可**实现 NoneProtocol 子类 attach 到 skywalk 接口**提供 getPHY_MODE | **可行**（中成本，需 NoneProtocol vtable 布局，kcabi dump 覆盖）|
+| 2 | **WCM 共存闭环** | 服务缺失 | **M5 有 `WirelessCoexManager.framework` 实体**（含主二进制）；本机仅空壳（缺主二进制）→ 架构（arm64→x86_64）不可移植 | ⚠️ **条件可行**：需同 build 的 x86_64 主二进制来源（黑苹果镜像/同版本完整系统）|
+| 3 | **AWDL/AirDrop** | 能力 gate 封死 | 无新推翻；补充**观测实验**（override 虚拟接口槽 419/445/446 打日志，系统若曾尝试创建 awdl 接口即可见）| 判定维持；观测可一锤定音 |
+| 4 | 漫游档案触发 | 已接线待触发 | — | 维持 |
+| 5 | PMKID/FT 认证 | 收益低（不做）| — | 维持 |
+| 6 | F-6 省电 / P-2 多 TX | 评估维持 | — | 维持 |
+
+**新三选项**：① E-4 PHY：实现 NoneProtocol 子类（本机逆向可解）；② WCM：找同版 x86_64 框架源（资源型）；③ AWDL：观测探针（一次重启）。
