@@ -210,3 +210,14 @@ Apple 私域广播载荷的"剪贴板能力"位由系统组装；对端看到 0�
   两机皆静默**；"advise 从不触发"= 系统设计行为（同 WCM 模式），非 Hackintosh 缺陷。
 - W1 全部收官：扫描记录支路=驱动侧可控且已生效（d23f0dd in-ship）；漫游链=调参消费实证+
   advise 静默符合系统设计；无需（也不值得）再重启实验。
+
+## 13. E-4 聚合器定位 + M1 内核钩子启动（2026-11-07 深夜）
+- **0xffffff80021a4bc2（kc 内，388B）= PHY 应答聚合器**（Ghidra 特征扫描唯一命中：
+  同时含 0x9f/0x80/0x100/0xe）。反编译机制：
+  - SUPPORTED 初值 0x9F；协议状态 +0xcad 的 bit7 置位 → 0x19F（&0x10 → 0x29F/0x39F be）
+  - ACTIVE 判定：+0xcad bit7 → iVar8=0x100（ax）；否则沿 vtable(0x2b0/0x2a8/0x1f8/0x2a0/0x328)
+    链得到 0x80/0x10/0x2...（ac/HT/a...）→ 这就是三轮实验从未触及的"接口内部位"来源。
+- **A 方案落地形态升级**：Lilu KernelPatcher routeFunction 整体替换该函数
+  （SUPPORTED=0x19F、ACTIVE=0x100 恒真，链路本就 HE/ax）→ 全部读方（Profiler/设置/
+  phyprobe）一致 ax；作用域=内核读路径，非伪造（值与真实能力一致）。
+- 插件命名 MtkPhyFix（kext，Lilu 1.7.3+ 插件），源码入 WTLWifiMenu/MtkPhyFix/。
