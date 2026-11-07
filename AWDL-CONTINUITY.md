@@ -190,3 +190,10 @@ macOS 的 AWDL 由 **IO80211Family 系统栈垄断**，AirDrop 走系统 UI/分�
 3. 因此 **"接住 ioctl"路线对 AWDL 无效**；AWDL 对第三方驱动维持"需突破能力 gate"判定，**够本收束**
 ### 附带战利品（真实可做）
 这 16 个命令的放行+实现可改善现网体验：NSS（空间流/速率显示）、CHANNELS_INFO（信道信息）、ROAM_PROFILE（漫游配置通道）、OFFLOAD_ARP/NDP（省电 offload）、BTCOEX（共存）等——低风险、1 次重启可验证。
+
+## 十、通用命令实现落地（2026-11-07 实机验证）
+
+- 实现并验证（重启 3 轮）：getNSS(2 流)、getCHANNELS_INFO(12 信道)、setPM_MODE/setROAM_PROFILE/
+  setWCL_ROAM_PROFILE_CONFIG，探针放行 18 码 → **MtkNativeRejected 归零**（此前 6200+）。
+- 系统实际仅探测 18/361 个带 0xcc8 探针的命令；其余不请求，未放行（防未知行为）。
+- 结论保持：**AWDL 需能力级 gate（第三方无路）**；通用命令通道已打通并改善系统交互。
