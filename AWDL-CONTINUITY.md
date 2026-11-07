@@ -60,7 +60,32 @@ iPhone --(BLE 发现信标,可选)--> Mac
 **参考现状**：itlwm 社区不支持 AWDL；Linux 至今无生产级 AWDL（NAN 是不同协议但可做思路参考）。
 **预估**：月级工程 + 高回归风险（可能影响现有 Wi-Fi 稳定性），**维持不做**的结论。
 
-## 五、修正说明
+## 五、外部项目评估（2026-11-07）
+
+| 项目 | 内容 | 对我们的意义 |
+|---|---|---|
+| **Guizzan/mt7927-airdrop** | Linux 上 MT7927(`mt7925e`) 的 AirDrop：实测 iPhone→PC ~7MB/s、Mac→PC ~10MB/s | **最重要的硬件可行性证据** |
+| **seemoo-lab/opendrop** | AirDrop 应用层（Python，AWDL 之上）| AWDL/AirDrop 协议层开源参考 |
+| **jedbillyb/owl**（seemoo-lab/owl fork）| AWDL 协议核心 + 用户态虚拟接口 + 信道序列策略 | AWDL 协议实现参考 + 信道调度经验（如 `pin` 到 peer 信道会破坏 iOS26 TX 的反例）|
+
+**mt7927-airdrop 揭示的芯片能力（关键）**：让 MT7927 收发 AWDL 只需三条底层手段，且全部**与 macOS 驱动已有原语重合**：
+
+| Linux 侧手段 | 解释 | macOS 驱动对应能力 |
+|---|---|---|
+| 为 AWDL peer 启动**固件 RX Block Ack**（`mt7925_mcu_uni_rx_ba`）| A-MPDU 收发必需 | ✅ 已有 BA 会话（MtkW9Ba / rxBaStart/rxBaStop / BA 窗口）|
+| 把 peer 作为**关联 STA 加入隐藏 AP vif**（`awdl-sta`）| 固件要有该 peer 的 station 记录 | ✅ 已有 STA_REC 增删（joinStart/staRemove）|
+| 多虚拟接口同信道 + sniffer 信道配置 | 主 STA 与 AWDL 共存 | ⚠️ 有 ROC（临时占道，MtkRoc）；多 vif 需扩展 |
+
+> **这条信息推翻了此前"芯片不支持/不确定"的保留**：**MT7927 硬件/固件完全具备 AWDL 收发能力**，
+> 且具体手段与我们已经实现的驱动原语高度重合。
+
+**为何仍不能直接移植**：Linux 方案的 AWDL 协议跑在**用户态 OWL**（自研栈 + netlink 虚拟接口），与 Linux 卡驱动解耦；
+macOS 的 AWDL 由 **IO80211Family 系统栈垄断**，AirDrop 走系统 UI/分享框架，第三方 kext 无法"自建协议栈"接入。
+要在 macOS 上用系统 AirDrop，只能**配合系统栈**（awdl0 + AWDL ioctl 契约 + 主链路分时），这是唯一的、未变的工作量/风险点。
+
+**结论更新**：AWDL 缺口从"协议未知 + 芯片未知"收敛为**单一且明确的一步——逆向 IO80211Family 的 AWDL 驱动契约**（0x0161 家族 ioctl、awdl0 注册、信道分时调度）。协议行为有 OWL/opendrop 参考、芯片原语已有。可行性评估从"极低"上调为"**有明确路径但仍是月级逆向工程**"。
+
+### 五、修正说明
 
 上一版"一票测试"预判"发现也会不可用"，实测修正：**发现（BLE）与握手（局域网链路本地）在无 AWDL 时依然可用**，
 只有**数据传输**被 AWDL 卡住。对 AirDrop 的判定从"全链路不可用"更新为"仅传输不可用"。
