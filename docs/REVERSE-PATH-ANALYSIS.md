@@ -244,3 +244,12 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
 - **终判：E-4 维持"结构性不可修"**，证据从早期"NoneProtocol 纯虚"推断升级为
   "驱动侧 apple80211 表面三层排除 + kc 全量反证"；phyprobe 为恒久复测工具。
 - 实验 A/B 改动为真实性声明（MT7927 确为 HE/ax 能力），保留无害；如需回退可随时（代价 1 重启）。
+
+### WCM 终局补证（2026-11-07 深夜，ipsw 3.1.743 实体化后）
+- 前置修正：26.7.2 真二进制（REV/fw26/cache/WirelessCoexManager，114KB x86_64）**导出 `_WCMEnabled`
+  函数**（0x7ffe0538a7ac T）——此前"cache 无该串"是导出表压缩 trie 的 grep 盲区，结论路径修正。
+- 决定性运行时证据：vmmap 实证**本机与 M5（真机）的 bluetoothd 均未映射 WirelessCoexManager** →
+  dyld 启动闭包不解析该弱引用 → GOT=NULL → com.apple.WirelessCoexManager XPC 监听在任何 Mac 上都
+  不创建（两机一致）→ "WCM 未注册"= 系统设计行为，非 Hackintosh 故障（终局不变，证据升级）。
+- 框架真实符号（新资产）：WCMClientProxy / WCMSetting / WRM_UCMInterface / WRM_iRATInterface /
+  WRMBasebandMetricsInterface（registerClient 等）→ 供 CoreWiFi 侧 coex 对照（可选）。

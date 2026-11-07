@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Profile>
+	<UCM_EXT_VERSION>
+		<val>2</val>
+	</UCM_EXT_VERSION>
+	<UCM_EXT_WIFI_RSSI_NUM_RANGES>
+		<val>3</val>
+	</UCM_EXT_WIFI_RSSI_NUM_RANGES>
+	<UCM_EXT_WIFI_HI_LO_RSSI_THRESH_ARR>
+		<val>-35</val>
+		<val>-75</val>
+	</UCM_EXT_WIFI_HI_LO_RSSI_THRESH_ARR>
+	<UCM_EXT_WIFI_LO_HI_RSSI_THRESH_ARR>
+		<val>-30</val>
+		<val>-70</val>
+	</UCM_EXT_WIFI_LO_HI_RSSI_THRESH_ARR>
+	<UCM_EXT_BT_RSSI_NUM_RANGES>
+		<val>3</val>
+	</UCM_EXT_BT_RSSI_NUM_RANGES>
+	<UCM_EXT_BT_HI_LO_RSSI_THRESH_ARR>
+		<val>-35</val>
+		<val>-75</val>
+	</UCM_EXT_BT_HI_LO_RSSI_THRESH_ARR>
+	<UCM_EXT_BT_LO_HI_RSSI_THRESH_ARR>
+		<val>-30</val>
+		<val>-70</val>
+	</UCM_EXT_BT_LO_HI_RSSI_THRESH_ARR>
+	<UCM_EXT_COEX_MODE_ARR>
+		<wifi_hi>
+			<val>0</val>
+			<val> 0</val>
+			<val> 0 </val>
+		</wifi_hi>
+		<wifi_med>
+			<val>0</val>
+			<val> 0</val>
+			<val> 0 </val>
+		</wifi_med>
+		<wifi_lo>
+			<val>0</val>
+			<val> 0</val>
+			<val> 0 </val>
+		</wifi_lo>
+	</UCM_EXT_COEX_MODE_ARR>
+	<UCM_EXT_COEX_DESENSE_ARR>
+		<wifi_hi>
+			<val> 1 </val>
+			<val> 1 </val>
+			<val> 0 </val>
+		</wifi_hi>
+		<wifi_med>
+			<val> 1 </val>
+			<val> 2 </val>
+			<val> 0 </val>
+		</wifi_med>
+		<wifi_lo>
+			<val> 0 </val>
+			<val> 0 </val>
+			<val> 0 </val>
+		</wifi_lo>
+	</UCM_EXT_COEX_DESENSE_ARR>
+	<UCM_EXT_TX_PWR_RSSI_NUM_RANGES>
+		<val>2</val>
+	</UCM_EXT_TX_PWR_RSSI_NUM_RANGES>
+	<UCM_EXT_ACK_TX_PWR_WIFI_HI_LO_RSSI_THRESH_ARR>
+		<val>-80</val>
+	</UCM_EXT_ACK_TX_PWR_WIFI_HI_LO_RSSI_THRESH_ARR>
+	<UCM_EXT_ACK_TX_PWR_WIFI_LO_HI_RSSI_THRESH_ARR>
+		<val> -75 </val>
+	</UCM_EXT_ACK_TX_PWR_WIFI_LO_HI_RSSI_THRESH_ARR>
+	<UCM_EXT_DATA_TX_PWR_WIFI_HI_LO_RSSI_THRESH_ARR>
+		<val> -70 </val>
+	</UCM_EXT_DATA_TX_PWR_WIFI_HI_LO_RSSI_THRESH_ARR>
+	<UCM_EXT_DATA_TX_PWR_WIFI_LO_HI_RSSI_THRESH_ARR>
+		<val> -70 </val>
+	</UCM_EXT_DATA_TX_PWR_WIFI_LO_HI_RSSI_THRESH_ARR>
+	<UCM_EXT_BT_COEX_CHAIN_ATTR_ARR>
+		<chain_attr_0>
+			<UCM_EXT_ACK_TX_PWR_ARR>
+				<val>48</val>
+				<val>127</val>
+			</UCM_EXT_ACK_TX_PWR_ARR>
+			<UCM_EXT_DATA_TX_PWR_ARR>
+				<val>127</val>
+				<val>127</val>
+			</UCM_EXT_DATA_TX_PWR_ARR>
+		</chain_attr_0>
+		<chain_attr_1>
+			<UCM_EXT_ACK_TX_PWR_ARR>
+				<val>-128</val>
+				<val>-128</val>
+			</UCM_EXT_ACK_TX_PWR_ARR>
+			<UCM_EXT_DATA_TX_PWR_ARR>
+				<val>127</val>
+				<val>127</val>
+			</UCM_EXT_DATA_TX_PWR_ARR>
+		</chain_attr_1>
+	</UCM_EXT_BT_COEX_CHAIN_ATTR_ARR>
+</Profile>
+
+
+

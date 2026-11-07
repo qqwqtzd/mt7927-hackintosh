@@ -1,0 +1,50 @@
+(version 1)
+(deny default)
+
+(import "system.sb")
+
+;; Enable pboard to call realpath() and re-issue sandbox extensions for file promises.
+(allow file-read-metadata)
+(allow file-issue-extension
+    (require-all
+        (extension-class "com.apple.app-sandbox.read")
+        (extension "com.apple.app-sandbox.read")))
+(allow file-issue-extension
+    (require-all
+        (extension-class "com.apple.app-sandbox.read")
+        (extension "com.apple.app-sandbox.read-write")))
+(allow file-issue-extension
+    (require-all
+        (extension-class "com.apple.app-sandbox.read-write")
+        (extension "com.apple.app-sandbox.read-write")))
+
+;; If a valid sandbox extension is available, allow reading of files and their metadata, so that ImageIO may gather image metadata. (ImageIO will initially open the file in-process, but then uses its ImageIOXPCService to touch the untrusted data.)
+(allow file-read*
+    (require-any
+        (extension "com.apple.app-sandbox.read")
+        (extension "com.apple.app-sandbox.read-write")))
+
+(allow mach-lookup
+    (global-name "com.apple.coreservices.uasharedpasteboardmanager.xpc")
+    (global-name "com.apple.coreservices.launchservicesd")
+    (global-name "com.apple.CoreServices.coreservicesd")
+    (global-name "com.apple.coreservices.quarantine-resolver")
+    (global-name "com.apple.lsd.mapdb")
+    (global-name "com.apple.biome.access.user"
+                 "com.apple.biome.compute.source.user"))
+
+
+(allow mach-task-name)
+
+(allow file-read* (literal "/usr/libexec/pboard"))
+
+;; For validating the entitlements of clients.
+(allow process-info-codesignature)
+
+;; For proc_pidpath_audittoken, so we can find CSUIA
+(allow process-info-pidinfo)
+
+;; For submitting events to EndpointSecurity
+(with-filter (mac-policy-name "EndpointSecurity")
+  (allow system-mac-syscall
+      (mac-syscall-number  43)))    ; ES_SYSCALL_PBOARD_REQUEST
