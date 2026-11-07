@@ -1,0 +1,65 @@
+From a20f30d1f0b359a19ee9f9de1d959442d63ff844 Mon Sep 17 00:00:00 2001
+From: links <dev@mt7927.dev>
+Date: Sat, 7 Nov 2026 10:16:24 +0800
+Subject: [PATCH 2/4] mt7927: fix roam picking (drop wantBssid lock), enable
+ roaming by default
+
+- cmPickRoam no longer filters candidates by wantBssid: the native front end
+  locks onto whichever candidate came first, which made roaming never fire.
+  Same-SSID + different BSSID + delta/cooldown gates keep it safe.
+- Info.plist: MtkRoam=true, MtkRoamDelta=12, MtkRoamCooldown=20000 so roaming
+  is on by default after a build (was default off).
+---
+ Info.plist      | 6 ++++++
+ src/MtkJoin.cpp | 8 ++++----
+ 2 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/Info.plist b/Info.plist
+index 7aab49a..74d8edd 100644
+--- a/Info.plist
++++ b/Info.plist
+@@ -51,6 +51,12 @@
+ 			<integer>3</integer>
+ 			<key>MtkPower</key>
+ 			<true/>
++			<key>MtkRoam</key>
++			<true/>
++			<key>MtkRoamCooldown</key>
++			<integer>20000</integer>
++			<key>MtkRoamDelta</key>
++			<integer>12</integer>
+ 			<key>MtkRxBa</key>
+ 			<true/>
+ 			<key>MtkStallSec</key>
+diff --git a/src/MtkJoin.cpp b/src/MtkJoin.cpp
+index cdffe6b..cabed2f 100644
+--- a/src/MtkJoin.cpp
++++ b/src/MtkJoin.cpp
+@@ -797,8 +797,6 @@ int MtkWlan::cmPickSaved(int *net) {
+ // current one (by roamDelta, with hysteresis; a weak current AP lowers the bar so we escape it sooner). It reads the
+ // fresh RSSI of both from the BSS cache (the background scan updates them). -1 = no switch worth making.
+ int MtkWlan::cmPickRoam() {
+-    bool bssidSet = false;
+-    for (int i = 0; i < 6; i++) if (wantBssid[i]) bssidSet = true;
+     int curRssi = -127, best = -1, bestRssi = -127;
+     // pass 1: the current AP's fresh signal (the scan refreshed its cache entry)
+     for (int i = 0; i < nBss; i++) {
+@@ -810,11 +808,13 @@ int MtkWlan::cmPickRoam() {
+     }
+     int delta = roamDelta < 0 ? -roamDelta : roamDelta;   // the (absolute) dB the candidate must win by
+     if (curRssi <= -100) delta = 4;                       // no usable current signal: take any clearly better peer
+-    // pass 2: best different, joinable candidate to that SSID, at least delta dB stronger than the current AP
++    // pass 2: best different, joinable candidate to that SSID, at least delta dB stronger than the current AP. We do
++    // NOT keep a wantBssid filter here (unlike cmPick): the whole point of roaming is to leave the (often weak) AP the
++    // native front end happened to lock onto first and switch to a stronger peer of the same SSID. Same-SSID + a
++    // different BSSID (tgtBssid excluded) + the delta/cooldown gates keep this from wandering off or ping-ponging.
+     for (int i = 0; i < nBss; i++) {
+         const MtkBss &b = bss[i];
+         if (b.ssidLen != wantSsidLen || memcmp(b.ssid, wantSsid, wantSsidLen)) continue;
+-        if (bssidSet && memcmp(b.bssid, wantBssid, 6)) continue;
+         if (!memcmp(b.bssid, tgtBssid, 6)) continue;
+         if (!bssJoinable(b, wantHasPmk)) continue;
+         if (b.rssi < curRssi + delta) continue;           // not clearly stronger: keep the hysteresis pole
+-- 
+2.50.1 (Apple Git-155)
+

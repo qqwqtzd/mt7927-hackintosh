@@ -1,0 +1,158 @@
+From 3aed2435aed9067c4a5866c075118f21bdc52bfc Mon Sep 17 00:00:00 2001
+From: links <dev@mt7927.dev>
+Date: Sat, 7 Nov 2026 09:47:07 +0800
+Subject: [PATCH 1/4] =?UTF-8?q?mt7927:=20add=20autonomous=20Wi-Fi=20roamin?=
+ =?UTF-8?q?g=20(multi-AP=20same=20SSID),=20default=20off=EF=BC=88RSSI=20?=
+ =?UTF-8?q?=E6=BC=AB=E6=B8=B8=EF=BC=89?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/MtkJoin.cpp | 59 +++++++++++++++++++++++++++++++++++++++++++++++++
+ src/MtkWlan.cpp | 16 ++++++++++++++
+ src/MtkWlan.hpp | 10 +++++++++
+ 3 files changed, 85 insertions(+)
+
+diff --git a/src/MtkJoin.cpp b/src/MtkJoin.cpp
+index d887ac4..cdffe6b 100644
+--- a/src/MtkJoin.cpp
++++ b/src/MtkJoin.cpp
+@@ -30,6 +30,7 @@ constexpr int JOIN_TRIES = 4;
+ constexpr uint32_t CM_PERIOD_TICKS = 100, CM_IDLE_RESCAN_TICKS = 15000, CM_WANT_RESCAN_TICKS = 5000,
+                    CM_WANT_RESCAN_SLOW_TICKS = 15000, CM_WANT_FALLBACK_TICKS = 30000, CM_USER_SCAN_GRACE_TICKS = 10000,
+                    CM_BOOT_GRACE_TICKS = 20000, CM_ONFALLBACK_RESCAN_TICKS = 30000, CM_BACKOFF_MAX_TICKS = 60000;
++constexpr uint32_t ROAM_RESCAN_TICKS = 15000;             // roam: background-scan interval while associated (15 s)
+ constexpr uint16_t REASON_LEAVING = 3;
+ 
+ // printable copy of an SSID for properties and log lines
+@@ -792,6 +793,36 @@ int MtkWlan::cmPickSaved(int *net) {
+     return best;
+ }
+ 
++// Roaming: the best joinable BSS of the SSID we are on, only when it is a different AP clearly stronger than the
++// current one (by roamDelta, with hysteresis; a weak current AP lowers the bar so we escape it sooner). It reads the
++// fresh RSSI of both from the BSS cache (the background scan updates them). -1 = no switch worth making.
++int MtkWlan::cmPickRoam() {
++    bool bssidSet = false;
++    for (int i = 0; i < 6; i++) if (wantBssid[i]) bssidSet = true;
++    int curRssi = -127, best = -1, bestRssi = -127;
++    // pass 1: the current AP's fresh signal (the scan refreshed its cache entry)
++    for (int i = 0; i < nBss; i++) {
++        const MtkBss &b = bss[i];
++        if (memcmp(b.bssid, tgtBssid, 6)) continue;
++        if (b.ssidLen != wantSsidLen || memcmp(b.ssid, wantSsid, wantSsidLen)) continue;
++        curRssi = b.rssi;
++        break;
++    }
++    int delta = roamDelta < 0 ? -roamDelta : roamDelta;   // the (absolute) dB the candidate must win by
++    if (curRssi <= -100) delta = 4;                       // no usable current signal: take any clearly better peer
++    // pass 2: best different, joinable candidate to that SSID, at least delta dB stronger than the current AP
++    for (int i = 0; i < nBss; i++) {
++        const MtkBss &b = bss[i];
++        if (b.ssidLen != wantSsidLen || memcmp(b.ssid, wantSsid, wantSsidLen)) continue;
++        if (bssidSet && memcmp(b.bssid, wantBssid, 6)) continue;
++        if (!memcmp(b.bssid, tgtBssid, 6)) continue;
++        if (!bssJoinable(b, wantHasPmk)) continue;
++        if (b.rssi < curRssi + delta) continue;           // not clearly stronger: keep the hysteresis pole
++        if (b.rssi > bestRssi) { best = i; bestRssi = b.rssi; }
++    }
++    return best;
++}
++
+ // Outcome of a join: reset or grow the backoff (5, 10, 20, 40, 60 s), tell a v2 front end
+ void MtkWlan::cmResult(uint32_t result) {
+     lastResult = result;
+@@ -845,6 +876,34 @@ void MtkWlan::cmService() {
+             }
+             if (ticks - cmLastScanAt >= CM_ONFALLBACK_RESCAN_TICKS) scanWanted = true;
+         }
++        // roaming (roamOn, a real wanted network, not the fallback): background-scan on a timer while associated
++        // and, once a scan settles, switch to a clearly stronger same-SSID AP (a short leave+join). Cooldown
++        // throttles the switches so a walking user does not ping-pong between two near peers.
++        else if (roamOn && wantActive && !onFallback && !disconnectPending) {
++            if ((int32_t)(ticks - roamNextScanAt) >= 0 && ticks - roamLastSwitchAt >= roamCooldownTicks) {
++                roamNextScanAt = ticks + ROAM_RESCAN_TICKS;
++                scanWanted = true;                       // refresh the BSS cache (incl. the current AP's RSSI)
++            }
++            if ((int32_t)(scanFinishedAt - cmLastPickAt) > 0) {   // a background scan just settled
++                cmLastPickAt = ticks;
++                if (ticks - roamLastSwitchAt < roamCooldownTicks) return;   // still cooling down after a switch
++                int r = cmPickRoam();
++                roamEvals++;
++                if (r >= 0) {
++                    roamLastSwitchAt = ticks;
++                    roams++;
++                    char shown[33];
++                    safeSsid(bss[r].ssid, bss[r].ssidLen, shown);
++                    char t[80];
++                    snprintf(t, sizeof(t), "W5 roam %s -> ch %u (rssi %d)", shown, bss[r].ch, bss[r].rssi);
++                    step(t);
++                    setNum("MtkW5Roam", roams);
++                    joinTeardown(REASON_LEAVING);
++                    joinStart(r);
++                    return;
++                }
++            }
++        }
+         return;
+     }
+     if (joinState != 0) return;
+diff --git a/src/MtkWlan.cpp b/src/MtkWlan.cpp
+index 47204d4..2def0b6 100644
+--- a/src/MtkWlan.cpp
++++ b/src/MtkWlan.cpp
+@@ -144,6 +144,22 @@ bool MtkWlan::start(IOService *provider) {
+         setNum("MtkAutoNetworkCount", nAutoNets);
+     }
+     autoOpen = autoAllowed();
++    // roaming (multi-AP same SSID, default off): MtkRoam true, or boot-arg mtkroam=1. The RSSI hysteresis and the
++    // switch cooldown are tameable via MtkRoamDelta (dB, 1..40) / MtkRoamCooldown (ticks = 100 ms units).
++    if (OSBoolean *rm = OSDynamicCast(OSBoolean, getProperty("MtkRoam"))) roamOn = rm->isTrue();
++    uint32_t roamArg = 0;
++    PE_parse_boot_argn("mtkroam", &roamArg, sizeof(roamArg));
++    if (roamArg) roamOn = true;
++    if (OSNumber *rd = OSDynamicCast(OSNumber, getProperty("MtkRoamDelta"))) {
++        uint32_t v = rd->unsigned32BitValue();
++        if (v >= 1 && v <= 40) roamDelta = (int8_t)v;                          // RSSI win in dB, 1..40
++    }
++    if (OSNumber *rc = OSDynamicCast(OSNumber, getProperty("MtkRoamCooldown"))) {
++        if (rc->unsigned32BitValue() >= 100 && rc->unsigned32BitValue() <= 60000) roamCooldownTicks = rc->unsigned32BitValue();
++    }
++    setNum("MtkRoam", roamOn ? 1 : 0);
++    setNum("MtkRoamDelta", (uint32_t)roamDelta);
++    setNum("MtkRoamCooldown", roamCooldownTicks);
+     // link supervisor (I-096): seconds of a dead link before it acts, 0 = off; boot-arg mtkstall= overrides
+     uint32_t stallSec = 8;
+     if (OSNumber *n = OSDynamicCast(OSNumber, getProperty("MtkStallSec"))) stallSec = n->unsigned32BitValue();
+diff --git a/src/MtkWlan.hpp b/src/MtkWlan.hpp
+index 77136be..5c270bb 100644
+--- a/src/MtkWlan.hpp
++++ b/src/MtkWlan.hpp
+@@ -180,6 +180,7 @@ private:
+     int cmPick();
+     int cmPickOpen();
+     int cmPickSaved(int *net);
++    int cmPickRoam();                         // best same-SSID candidate that beats the current AP by roamDelta, or -1
+     void cmResult(uint32_t result);
+     int coreScan();
+     int coreJoin(const mtk_join_params *p);
+@@ -371,6 +372,15 @@ private:
+     uint8_t cmLastBssid[6] = {};
+     bool cmKick = false, switchPending = false, disconnectPending = false, rejoinPending = false;
+     bool onFallback = false;                   // the current join is the open fallback, not the wanted network
++    // roaming (multi-AP same SSID, default off): periodically background-scan while associated and, when a clearly
++    // better joinable AP of the same SSID appears, leave and rejoin it. The switch is a short leave+join (the
++    // firmware joins one station profile), not an 802.11r FT seamless transition.
++    bool roamOn = false;                       // MtkRoam / boot-arg mtkroam=1
++    int8_t roamDelta = 12;                     // dB a candidate must beat the current AP by (MtkRoamDelta), hysteresis
++    uint32_t roamNextScanAt = 0;              // next tick to ask for a background scan while associated
++    uint32_t roamLastSwitchAt = 0;             // tick of the last roam switch (cooldown)
++    uint32_t roamCooldownTicks = 20000;        // 20 s minimum between switches (default, MtkRoamCooldown)
++    uint32_t roams = 0, roamEvals = 0;         // switches performed / candidate evaluations
+     // the RX path only flags a deauth / disassoc; the tick tears the link down
+     bool deauthPending = false;
+     uint16_t deauthPendingReason = 0;
+-- 
+2.50.1 (Apple Git-155)
+

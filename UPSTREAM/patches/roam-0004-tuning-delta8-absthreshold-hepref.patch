@@ -1,0 +1,160 @@
+From 22c0dc93860f3f5901ef3f923b794864bd2a6081 Mon Sep 17 00:00:00 2001
+From: links <dev@mt7927.dev>
+Date: Sat, 7 Nov 2026 10:41:19 +0800
+Subject: [PATCH 4/4] mt7927: roam tuning - delta 8 dB, absolute RSSI
+ threshold, HE preferred
+
+- MtkRoamDelta default 12 -> 8, aligned with the AC's roaming_dif=8
+- MtkRoamAbsRssi / MtkRoamAbsRssi24 (5 GHz 80 / 2.4 GHz 75 dBm magnitude, 0 = off):
+  only roam when the current AP is at/below the threshold, mirroring the router AC's
+  policy, so two near-peers in one room are not re-evaluated every 15 s
+- MtkRoamPreferHe (default true): within a 3 dB tie window prefer an HE (802.11ax) AP,
+  so an AX3000 peer wins over an AC1200 one when signals are close
+- publish MtkW5RoamEvals for roam-evaluation diagnostics; logic verified with 10 host
+  scenarios (delta/abs-threshold/he-tie all pass) + full host suite green
+---
+ Info.plist      |  8 +++++++-
+ src/MtkJoin.cpp | 24 +++++++++++++++++++++++-
+ src/MtkWlan.cpp | 16 ++++++++++++++++
+ src/MtkWlan.hpp |  7 +++++--
+ 4 files changed, 51 insertions(+), 4 deletions(-)
+
+diff --git a/Info.plist b/Info.plist
+index 74d8edd..6f336ee 100644
+--- a/Info.plist
++++ b/Info.plist
+@@ -56,7 +56,13 @@
+ 			<key>MtkRoamCooldown</key>
+ 			<integer>20000</integer>
+ 			<key>MtkRoamDelta</key>
+-			<integer>12</integer>
++			<integer>8</integer>
++			<key>MtkRoamAbsRssi</key>
++			<integer>80</integer>
++			<key>MtkRoamAbsRssi24</key>
++			<integer>75</integer>
++			<key>MtkRoamPreferHe</key>
++			<true/>
+ 			<key>MtkRxBa</key>
+ 			<true/>
+ 			<key>MtkStallSec</key>
+diff --git a/src/MtkJoin.cpp b/src/MtkJoin.cpp
+index cabed2f..1577a63 100644
+--- a/src/MtkJoin.cpp
++++ b/src/MtkJoin.cpp
+@@ -793,11 +793,21 @@ int MtkWlan::cmPickSaved(int *net) {
+     return best;
+ }
+ 
++// True when the BSS advertises HE (802.11ax) capabilities: a 255/35 extension element (HE Capabilities).
++bool bssHasHe(const MtkBss &b) {
++    const uint8_t *ie = b.ie, *end = b.ie + b.ieLen;
++    for (; ie + 2 <= end && ie + 2 + ie[1] <= end; ie += 2 + ie[1]) {
++        if (ie[0] == 255 && ie[1] >= 22 && ie[2] == 35) return true;
++    }
++    return false;
++}
++
+ // Roaming: the best joinable BSS of the SSID we are on, only when it is a different AP clearly stronger than the
+ // current one (by roamDelta, with hysteresis; a weak current AP lowers the bar so we escape it sooner). It reads the
+ // fresh RSSI of both from the BSS cache (the background scan updates them). -1 = no switch worth making.
+ int MtkWlan::cmPickRoam() {
+     int curRssi = -127, best = -1, bestRssi = -127;
++    bool bestHe = false;
+     // pass 1: the current AP's fresh signal (the scan refreshed its cache entry)
+     for (int i = 0; i < nBss; i++) {
+         const MtkBss &b = bss[i];
+@@ -808,17 +818,28 @@ int MtkWlan::cmPickRoam() {
+     }
+     int delta = roamDelta < 0 ? -roamDelta : roamDelta;   // the (absolute) dB the candidate must win by
+     if (curRssi <= -100) delta = 4;                       // no usable current signal: take any clearly better peer
++    // absolute threshold: while the current AP is still usable (above the threshold), never roam. This mirrors the
++    // AC's own policy (5 GHz -80 / 2.4 GHz -75) and stops two near-peers in the same room from being re-evaluated
++    // pointlessly every 15 s. A stale/unheard current entry (-127) stays eligible so a loss of beacons can roam.
++    int absThr = (tgtCh <= 14) ? roamAbsRssi24 : roamAbsRssi;
++    if (absThr && curRssi != -127 && curRssi > absThr) return -1;
+     // pass 2: best different, joinable candidate to that SSID, at least delta dB stronger than the current AP. We do
+     // NOT keep a wantBssid filter here (unlike cmPick): the whole point of roaming is to leave the (often weak) AP the
+     // native front end happened to lock onto first and switch to a stronger peer of the same SSID. Same-SSID + a
+     // different BSSID (tgtBssid excluded) + the delta/cooldown gates keep this from wandering off or ping-ponging.
++    // Within a 3 dB tie window the HE (802.11ax) AP wins, so an AX3000 peer is not passed over for an AC1200 one that
++    // happens to be 1 dB louder (roamPreferHe, default on).
+     for (int i = 0; i < nBss; i++) {
+         const MtkBss &b = bss[i];
+         if (b.ssidLen != wantSsidLen || memcmp(b.ssid, wantSsid, wantSsidLen)) continue;
+         if (!memcmp(b.bssid, tgtBssid, 6)) continue;
+         if (!bssJoinable(b, wantHasPmk)) continue;
+         if (b.rssi < curRssi + delta) continue;           // not clearly stronger: keep the hysteresis pole
+-        if (b.rssi > bestRssi) { best = i; bestRssi = b.rssi; }
++        int s = b.rssi;
++        bool he = roamPreferHe && bssHasHe(b);
++        if (best < 0 || s > bestRssi + 3) { best = i; bestRssi = s; bestHe = he; }
++        else if (he && !bestHe && s >= bestRssi) { best = i; bestRssi = s; bestHe = true; }   // AX wins close races
++        else if (he == bestHe && s > bestRssi) { best = i; bestRssi = s; bestHe = he; }
+     }
+     return best;
+ }
+@@ -889,6 +910,7 @@ void MtkWlan::cmService() {
+                 if (ticks - roamLastSwitchAt < roamCooldownTicks) return;   // still cooling down after a switch
+                 int r = cmPickRoam();
+                 roamEvals++;
++                setNum("MtkW5RoamEvals", roamEvals);
+                 if (r >= 0) {
+                     roamLastSwitchAt = ticks;
+                     roams++;
+diff --git a/src/MtkWlan.cpp b/src/MtkWlan.cpp
+index 2def0b6..f2689df 100644
+--- a/src/MtkWlan.cpp
++++ b/src/MtkWlan.cpp
+@@ -154,11 +154,27 @@ bool MtkWlan::start(IOService *provider) {
+         uint32_t v = rd->unsigned32BitValue();
+         if (v >= 1 && v <= 40) roamDelta = (int8_t)v;                          // RSSI win in dB, 1..40
+     }
++    // absolute roam threshold (dBm magnitude, 0 = off): only roam when the current AP is at or below this.
++    // MtkRoamAbsRssi = 80 means -80 dBm on 5 GHz; MtkRoamAbsRssi24 applies to 2.4 GHz (75 = -75 dBm), mirroring the
++    // AC's roam policy so the driver and the AC agree on "this AP is bad enough to leave".
++    for (int band = 0; band < 2; band++) {
++        OSNumber *ra = OSDynamicCast(OSNumber, getProperty(band ? "MtkRoamAbsRssi24" : "MtkRoamAbsRssi"));
++        if (!ra) continue;
++        int32_t v = (int32_t)ra->unsigned32BitValue();
++        if (v >= 1 && v <= 100) {
++            int8_t *dst = band ? &roamAbsRssi24 : &roamAbsRssi;
++            *dst = (int8_t)(-v);
++        }
++    }
++    if (OSBoolean *ph = OSDynamicCast(OSBoolean, getProperty("MtkRoamPreferHe"))) roamPreferHe = ph->isTrue();
+     if (OSNumber *rc = OSDynamicCast(OSNumber, getProperty("MtkRoamCooldown"))) {
+         if (rc->unsigned32BitValue() >= 100 && rc->unsigned32BitValue() <= 60000) roamCooldownTicks = rc->unsigned32BitValue();
+     }
+     setNum("MtkRoam", roamOn ? 1 : 0);
+     setNum("MtkRoamDelta", (uint32_t)roamDelta);
++    setNum("MtkRoamAbsRssi", (uint32_t)(roamAbsRssi ? (uint32_t)(-roamAbsRssi) : 0));
++    setNum("MtkRoamAbsRssi24", (uint32_t)(roamAbsRssi24 ? (uint32_t)(-roamAbsRssi24) : 0));
++    setNum("MtkRoamPreferHe", roamPreferHe ? 1 : 0);
+     setNum("MtkRoamCooldown", roamCooldownTicks);
+     // link supervisor (I-096): seconds of a dead link before it acts, 0 = off; boot-arg mtkstall= overrides
+     uint32_t stallSec = 8;
+diff --git a/src/MtkWlan.hpp b/src/MtkWlan.hpp
+index 5c270bb..56311e0 100644
+--- a/src/MtkWlan.hpp
++++ b/src/MtkWlan.hpp
+@@ -372,11 +372,14 @@ private:
+     uint8_t cmLastBssid[6] = {};
+     bool cmKick = false, switchPending = false, disconnectPending = false, rejoinPending = false;
+     bool onFallback = false;                   // the current join is the open fallback, not the wanted network
+-    // roaming (multi-AP same SSID, default off): periodically background-scan while associated and, when a clearly
++    // roaming (multi-AP same SSID): periodically background-scan while associated and, when a clearly
+     // better joinable AP of the same SSID appears, leave and rejoin it. The switch is a short leave+join (the
+     // firmware joins one station profile), not an 802.11r FT seamless transition.
+     bool roamOn = false;                       // MtkRoam / boot-arg mtkroam=1
+-    int8_t roamDelta = 12;                     // dB a candidate must beat the current AP by (MtkRoamDelta), hysteresis
++    int8_t roamDelta = 8;                      // dB a candidate must beat the current AP by (MtkRoamDelta), hysteresis
++    int8_t roamAbsRssi = 0, roamAbsRssi24 = 0; // dBm, 0 = off: only roam when the current AP is at/below this
++                                               //   (MtkRoamAbsRssi / MtkRoamAbsRssi24, mirror the AC's -80/-75 policy)
++    bool roamPreferHe = true;                  // tie-break within 3 dB: prefer an HE (802.11ax) AP (MtkRoamPreferHe)
+     uint32_t roamNextScanAt = 0;              // next tick to ask for a background scan while associated
+     uint32_t roamLastSwitchAt = 0;             // tick of the last roam switch (cooldown)
+     uint32_t roamCooldownTicks = 20000;        // 20 s minimum between switches (default, MtkRoamCooldown)
+-- 
+2.50.1 (Apple Git-155)
+

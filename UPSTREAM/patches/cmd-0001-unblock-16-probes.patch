@@ -1,0 +1,130 @@
+From 9824e97d9bba16916ee7bf7ca101a3adfcf4ff16 Mon Sep 17 00:00:00 2001
+From: links <dev@mt7927.dev>
+Date: Sat, 7 Nov 2026 12:51:14 +0800
+Subject: [PATCH 1/2] native: unblock 16 commonly-asked command probes (t2)
+
+REA-mapped all 16 rejected codes to apple80211 commands (BEACON_INFO,
+CHANNELS_INFO, NSS, BTCOEX, ROAM_PROFILE, offload, ...). Probe blocked
+them at the 0xcc8 gate; unblocking the probe cleared MtkNativeRejected
+to 1 and the system moved on to ask setPM_MODE - the first truly new
+command seen. Behaviour otherwise unchanged; slot handlers beyond ABI
+dump (506/508/538) remain a separate work item.
+---
+ src/MtkWlanNative.cpp | 54 ++++++++++++++++++++++++++++++++++++++++++-
+ src/MtkWlanNative.hpp |  6 +++++
+ 2 files changed, 59 insertions(+), 1 deletion(-)
+
+diff --git a/src/MtkWlanNative.cpp b/src/MtkWlanNative.cpp
+index db26084..37b6305 100644
+--- a/src/MtkWlanNative.cpp
++++ b/src/MtkWlanNative.cpp
+@@ -40,11 +40,40 @@ bool commandAllowed(int cmd) {
+     case 0x170: case 0x22d:                                 // SET_MAC_ADDRESS (the private address, asked before every join; N-141 died here), DBRG_ENTROPY
+     case 0x37: case 0x39: case 0xc3:                        // GUARD_INTERVAL, MCS, MCS_VHT (native #1: what Wi-Fi details show)
+     case 0x23a:                                             // HE_CAPABILITY (Wi-Fi 6: card capabilities + getHE_CAPABILITY)
++    // 2026-11-07 AWDL probe-gate experiment t2: unblock the probe (0xcc8 slot) for
++    // the 16 commonly-asked commands (fully mapped by REA/Ghidra against IO80211Family):
++    case 0x15a:                                             // getBEACON_INFO
++    case 0x0cf:                                             // getCHANNELS_INFO
++    case 0x0ff:                                             // getBTCOEX_PROFILE
++    case 0x01c:                                             // getLOCALE
++    case 0x055:                                             // setIE
++    case 0x1a8:                                             // getWCL_FW_HOT_CHANNELS
++    case 0x174:                                             // getBSS_BLACKLIST
++    case 0x187:                                             // getSLOW_WIFI_FEATURE_ENABLED
++    case 0x176:                                             // getTXRX_CHAIN_INFO
++    case 0x0d8:                                             // setROAM_PROFILE
++    case 0x233:                                             // getCONNECTION_ID
++    case 0x0c0:                                             // setOFFLOAD_NDP
++    case 0x161:                                             // getNSS
++    case 0x1ae:                                             // setWCL_ROAM_PROFILE_CONFIG
++    case 0x0bf:                                             // setOFFLOAD_ARP
++    case 0x216:                                             // getPLATFORM_CONFIG
+         return true;
+     default:
+         return false;
+     }
+ }
++
++// AWDL-observability (phase 1): the Family keeps asking the AWDL skywalk ioctls
++// (the 0x13?/0x01? family recorded in MtkNativeRejectedCodes) that we do not
++// answer yet. Recognise the codes seen so their requests are easy to grep.
++bool awdlFamilyCmd(unsigned long cmd) {
++    unsigned v = (unsigned)(cmd & 0xffff);
++    return v == 0x161 || v == 0x0cf || v == 0x15a || v == 0x0ff || v == 0x01c ||
++           v == 0x233 || v == 0x0c0 || v == 0x1ae || v == 0x0d8 || v == 0x216 ||
++           v == 0x055 || v == 0x1a8 || v == 0x174 || v == 0x187 || v == 0x0bf ||
++           v == 0x176;
++}
+ } // namespace
+ 
+ // ---- probe: enabled and the ABI guard ----------------------------------------------------------------------------------
+@@ -364,6 +393,9 @@ IOReturn MtkWlanNative::newUserClient(task_t task, void *securityID, UInt32 type
+ // ---- requests ------------------------------------------------------------------------------------------------------------
+ 
+ int MtkWlanNative::isCommandProhibited(int cmd) {
++    if (awdlFamilyCmd((unsigned long)cmd)) {
++        recordAwdlCmd((uint32_t)cmd);
++    }
+     nativeCall(this, 'I', (uint32_t)cmd);
+     if (commandAllowed(cmd)) return 0;
+     noteRejected(cmd);
+@@ -374,6 +406,19 @@ int MtkWlanNative::isCommandProhibited(int cmd) {
+     return kProhibited;
+ }
+ 
++// Keep the full 32-bit command values the Family probes with for the AWDL family,
++// so the apple80211 code <-> driver slot mapping can be built (16-bit is not enough).
++void MtkWlanNative::recordAwdlCmd(uint32_t cmd) {
++    for (unsigned i = 0; i < awdlFullCnt; i++)
++        if (awdlFull[i] == cmd) return;
++    if (awdlFullCnt < 24) awdlFull[awdlFullCnt++] = cmd;
++    char s[256];
++    size_t n = 0;
++    for (unsigned i = 0; i < awdlFullCnt; i++)
++        n += snprintf(s + n, sizeof(s) - n, "%s%08x", i ? " " : "", awdlFull[i]);
++    setProperty("MtkNativeAwdlFull", s);
++}
++
+ // Keep a small per-code histogram of the requests the front end refuses, so the next
+ // feature pass can implement the ones userland actually asks for instead of guessing.
+ void MtkWlanNative::noteRejected(int cmd) {
+@@ -402,7 +447,14 @@ void MtkWlanNative::publishRejected() {
+     setProperty("MtkNativeRejectedCodes", n ? s : "none");
+ }
+ 
+-IOReturn MtkWlanNative::handleCardSpecific(IO80211SkywalkInterface *, unsigned long cmd, void *, bool set) {
++IOReturn MtkWlanNative::handleCardSpecific(IO80211SkywalkInterface *i, unsigned long cmd, void *buf, bool set) {
++    if (awdlFamilyCmd(cmd)) {
++        awdlSeen++;
++        if ((awdlSeen & 1) == 1) {
++            nativeTrace(this, "awdl:card cmd 0x%x %s (#%u)", (unsigned)(cmd & 0xffff), set ? "set" : "get", awdlSeen);
++            setProperty("MtkNativeAwdlRequests", awdlSeen, 32);
++        }
++    }
+     nativeCall(this, 'H', (uint32_t)cmd | (set ? 0x80000000u : 0));
+     return kIOReturnUnsupported;
+ }
+diff --git a/src/MtkWlanNative.hpp b/src/MtkWlanNative.hpp
+index 37689ad..9ea9f7c 100644
+--- a/src/MtkWlanNative.hpp
++++ b/src/MtkWlanNative.hpp
+@@ -91,9 +91,15 @@ private:
+     bool countryFromOs = false;             // macOS set countryCode; it wins over the AP's Country element
+     uint8_t apCountry[3] = {0, 0, 0};       // Country element of the associated AP (802.11d), reported until macOS sets one
+     uint32_t rejected = 0;
++    // AWDL observability (phase 1): counts the Family's unanswered AWDL-family
++    // card ioctls so their traffic is visible without changing behaviour.
++    uint32_t awdlSeen = 0;
++    uint32_t awdlFull[24];                   // full 32-bit cmd values seen for the AWDL family
++    uint8_t awdlFullCnt = 0;
+     struct RejCode { uint16_t code; uint16_t count; };
+     RejCode rejCodes[16] = {};
+     void noteRejected(int cmd);
+     void publishRejected();
++    void recordAwdlCmd(uint32_t cmd);   // AWDL observability: distinct full cmd values
+     bool capsTraced = false;
+ };
+-- 
+2.50.1 (Apple Git-155)
+

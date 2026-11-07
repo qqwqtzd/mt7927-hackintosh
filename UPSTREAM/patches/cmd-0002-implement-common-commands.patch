@@ -1,0 +1,125 @@
+From 7a0fb1c35edb77f1fe8ae4094c7673036613a8c6 Mon Sep 17 00:00:00 2001
+From: links <dev@mt7927.dev>
+Date: Sat, 7 Nov 2026 13:02:24 +0800
+Subject: [PATCH 2/2] native: implement common apple80211 commands + unblock
+ MAX_NSS_FOR_AP
+
+- getNSS (2 spatial streams), getCHANNELS_INFO (12 common channels) filled;
+  layouts from itlwm apple80211_ioctl.h, caller sizes from IO80211Family.
+- setPM_MODE / setROAM_PROFILE / setWCL_ROAM_PROFILE_CONFIG accepted.
+- unblock probe 0x103 (getMAX_NSS_FOR_AP); MtkNativeRejected collapses to 0.
+- Regen'd iface stubs (5 slots moved to hand impls), HE_CAPABILITY hand-edit kept.
+---
+ abi/25G332/iface_stubs.inc |  5 -----
+ src/MtkWlanNative.cpp      |  1 +
+ src/MtkWlanNativeReq.cpp   | 39 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 40 insertions(+), 5 deletions(-)
+
+diff --git a/abi/25G332/iface_stubs.inc b/abi/25G332/iface_stubs.inc
+index 967e6ad..9a85dae 100644
+--- a/abi/25G332/iface_stubs.inc
++++ b/abi/25G332/iface_stubs.inc
+@@ -207,7 +207,6 @@
+ IOReturn MtkWlanNativeIf::getTXPOWER(apple80211_txpower_data* a1) { nativeCall(ctl, 'S', 473); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getPOWER_DEBUG_INFO(apple80211_power_debug_info* a1) { nativeCall(ctl, 'S', 480); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getHT_CAPABILITY(apple80211_ht_capability* a1) { nativeCall(ctl, 'S', 481); return kIOReturnUnsupported; }
+-IOReturn MtkWlanNativeIf::getCHANNELS_INFO(apple80211_channels_info* a1) { nativeCall(ctl, 'S', 483); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getVHT_CAPABILITY(apple80211_vht_capability* a1) { nativeCall(ctl, 'S', 484); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getROAM_PROFILE(apple80211_roam_profile_all_bands* a1) { nativeCall(ctl, 'S', 485); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getCHIP_COUNTER_STATS(apple80211_chip_stats* a1) { nativeCall(ctl, 'S', 486); return kIOReturnUnsupported; }
+@@ -233,7 +232,6 @@ IOReturn MtkWlanNativeIf::getLQM_CONFIG(apple80211_lqm_config_t* a1) { nativeCal
+ IOReturn MtkWlanNativeIf::getTRAP_CRASHTRACER_MINI_DUMP(apple80211_trap_mini_dump_data* a1) { nativeCall(ctl, 'S', 507); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getBEACON_INFO(apple80211_beacon_info_t* a1) { nativeCall(ctl, 'S', 508); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getCHIP_POWER_RANGE(apple80211_chip_power_limit* a1) { nativeCall(ctl, 'S', 509); return kIOReturnUnsupported; }
+-IOReturn MtkWlanNativeIf::getNSS(apple80211_nss_data* a1) { nativeCall(ctl, 'S', 510); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getHW_ADDR(apple80211_hw_mac_address* a1) { nativeCall(ctl, 'S', 511); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getCHIP_DIAGS(appl80211_chip_diags_data* a1) { nativeCall(ctl, 'S', 512); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::getHP2P_CTRL(apple80211_hp2p_ctrl* a1) { nativeCall(ctl, 'S', 513); return kIOReturnUnsupported; }
+@@ -283,7 +281,6 @@ IOReturn MtkWlanNativeIf::setOFFLOAD_ARP(apple80211_offload_arp_data* a1) { nati
+ IOReturn MtkWlanNativeIf::setOFFLOAD_NDP(apple80211_offload_ndp_data* a1) { nativeCall(ctl, 'S', 561); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setGAS_REQ(apple80211_gas_query_t* a1) { nativeCall(ctl, 'S', 562); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setVHT_CAPABILITY(apple80211_vht_capability* a1) { nativeCall(ctl, 'S', 563); return kIOReturnUnsupported; }
+-IOReturn MtkWlanNativeIf::setROAM_PROFILE(apple80211_roam_profile_all_bands* a1) { nativeCall(ctl, 'S', 564); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setDBG_GUARD_TIME_PARAMS(apple80211_dbg_guard_time_params* a1) { nativeCall(ctl, 'S', 565); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setLEAKY_AP_STATS_MODE(apple80211_leaky_ap_setting* a1) { nativeCall(ctl, 'S', 566); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setPRIVATE_MAC(apple80211_private_mac_data* a1) { nativeCall(ctl, 'S', 567); return kIOReturnUnsupported; }
+@@ -305,14 +302,12 @@ IOReturn MtkWlanNativeIf::setHP2P_CTRL(apple80211_hp2p_ctrl* a1) { nativeCall(ct
+ IOReturn MtkWlanNativeIf::setBSS_BLACKLIST(bss_blacklist* a1) { nativeCall(ctl, 'S', 584); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setSET_PROPERTY(apple80211_set_property_unserialized_data* a1) { nativeCall(ctl, 'S', 585); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setROAM_CACHE_UPDATE(apple80211_roam_cache_data* a1) { nativeCall(ctl, 'S', 586); return kIOReturnUnsupported; }
+-IOReturn MtkWlanNativeIf::setPM_MODE(apple80211_pm_mode* a1) { nativeCall(ctl, 'S', 587); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setSET_WIFI_ASSERTION_STATE(apple80211_wifi_assertion_data* a1) { nativeCall(ctl, 'S', 588); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setREALTIME_QOS_MSCS(apple80211_state_data* a1) { nativeCall(ctl, 'S', 589); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setSENSING_ENABLE(apple80211_sensing_enable_t* a1) { nativeCall(ctl, 'S', 590); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setSENSING_DISABLE(apple80211_sensing_disable_t* a1) { nativeCall(ctl, 'S', 591); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setWCL_REASSOC(apple80211_reassoc* a1) { nativeCall(ctl, 'S', 593); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setWCL_LEGACY_ROAM_PROFILE_CONFIG(apple80211_legacy_roam_profile_config* a1) { nativeCall(ctl, 'S', 595); return kIOReturnUnsupported; }
+-IOReturn MtkWlanNativeIf::setWCL_ROAM_PROFILE_CONFIG(apple80211_roam_profile_config* a1) { nativeCall(ctl, 'S', 596); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setWCL_ROAM_USER_CACHE(apple80211_user_roam_cache* a1) { nativeCall(ctl, 'S', 597); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setWCL_REAL_TIME_MODE(apple80211_wcl_real_time_mode* a1) { nativeCall(ctl, 'S', 599); return kIOReturnUnsupported; }
+ IOReturn MtkWlanNativeIf::setVOICE_IND_STATE(apple80211_voice_ind_state* a1) { nativeCall(ctl, 'S', 608); return kIOReturnUnsupported; }
+diff --git a/src/MtkWlanNative.cpp b/src/MtkWlanNative.cpp
+index 37b6305..bbe8bda 100644
+--- a/src/MtkWlanNative.cpp
++++ b/src/MtkWlanNative.cpp
+@@ -55,6 +55,7 @@ bool commandAllowed(int cmd) {
+     case 0x233:                                             // getCONNECTION_ID
+     case 0x0c0:                                             // setOFFLOAD_NDP
+     case 0x161:                                             // getNSS
++    case 0x103:                                             // getMAX_NSS_FOR_AP (btcoex max nss for ap)
+     case 0x1ae:                                             // setWCL_ROAM_PROFILE_CONFIG
+     case 0x0bf:                                             // setOFFLOAD_ARP
+     case 0x216:                                             // getPLATFORM_CONFIG
+diff --git a/src/MtkWlanNativeReq.cpp b/src/MtkWlanNativeReq.cpp
+index 8e73284..a0f7f4c 100644
+--- a/src/MtkWlanNativeReq.cpp
++++ b/src/MtkWlanNativeReq.cpp
+@@ -189,6 +189,45 @@ IOReturn MtkWlanNativeIf::getHW_SUPPORTED_CHANNELS(apple80211_sup_channel_data *
+     return fillChannels(this, ops, core, d);
+ }
+ 
++// t3 (2026-11-07): the commonly-asked apple80211 commands the probe gate now lets
++// through. Layouts from itlwm's apple80211_ioctl.h; caller buffer sizes read from
++// IO80211Family (getNSS 8 B, getCHANNELS_INFO 0x2720 B) - writes stay far inside.
++IOReturn MtkWlanNativeIf::getNSS(apple80211_nss_data *d) {
++    nativeCall(ctl, 'S', 510);
++    if (!d) return kIOReturnBadArgument;
++    store<uint32_t>(d, 0, 1);        // version
++    store<uint8_t>(d, 4, 2);        // 2 spatial streams (HE 2x2 160 MHz)
++    return kIOReturnSuccess;
++}
++
++IOReturn MtkWlanNativeIf::getCHANNELS_INFO(apple80211_channels_info *d) {
++    nativeCall(ctl, 'S', 483);
++    if (!d) return kIOReturnBadArgument;
++    static const uint8_t chans[] = {1, 6, 11, 36, 40, 44, 48, 149, 153, 157, 161, 165};
++    const unsigned n = (unsigned)(sizeof(chans) / sizeof(chans[0]));
++    store<uint32_t>(d, 0, 1);       // version
++    store<uint32_t>(d, 4, 0);       // unk1
++    store<uint16_t>(d, 8, (uint16_t)n);
++    for (unsigned i = 0; i < n; i++)
++        store<uint16_t>(d, 10 + 2 * i, (uint16_t)((chans[i] << 2) | 0));  // chan_spec, 20 MHz
++    return kIOReturnSuccess;
++}
++
++IOReturn MtkWlanNativeIf::setPM_MODE(apple80211_pm_mode *) {
++    nativeCall(ctl, 'S', 587);
++    return kIOReturnSuccess;        // accepted; the core owns power management
++}
++
++IOReturn MtkWlanNativeIf::setROAM_PROFILE(apple80211_roam_profile_all_bands *) {
++    nativeCall(ctl, 'S', 564);
++    return kIOReturnSuccess;        // accepted; roaming is driven by the core
++}
++
++IOReturn MtkWlanNativeIf::setWCL_ROAM_PROFILE_CONFIG(apple80211_roam_profile_config *) {
++    nativeCall(ctl, 'S', 596);
++    return kIOReturnSuccess;
++}
++
+ // Slot 470 on 25G241: setMacAddress(mloAddrArray&). The Family's IO80211MacAddressAgent builds the array on its stack
+ // (link i = the address with byte 5 + i; the first six bytes are the address, which is what laobamac's Tahoe front end
+ // reads too) and applies the address to the BSD interface only when this returns 0 (setLinkLayerAddress, message 0x3b,
+-- 
+2.50.1 (Apple Git-155)
+
