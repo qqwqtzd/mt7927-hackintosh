@@ -74,3 +74,17 @@
 最大的现实收益与最小风险是 **#1 与 #2**；#5 做可行性侦查后再定。AWDL 保持"不可行"结论。
 
 *（本文为分析，未实施。工具与依据见 docs/IO80211-REV-NOTES.md、AWDL-CONTINUITY.md。）*
+
+## 七、BT 共存链路最终闭环判定（2026-11-07 bluetoothd 逆向）
+
+```
+bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiState/coexCase…）
+  → XPC 推送 com.apple.WirelessCoexManager (WCM)
+  →（设计上）airportd UCM / CWRequest(0x13) → IO80211 BTCOEX → 驱动
+```
+逆向结论：
+- 蓝牙侧引擎完整（主动推）；airportd 接收端在（com.apple.wifi-xpc 等已注册，entitlement com.apple.wifi.ucm）。
+- **WCM 用户态服务在本机缺失**（launchd 无注册；bluetoothd 自身日志 "WirelessCoexManager not available"）。
+  同 CoreWiFi/IO80211.framework 命运：本机（Hackintosh 精简构建）用户态组件残缺。
+- 因此共存内容**推不到驱动**；我们驱动 BTCOEX 系列 accept 已就位（第三方能做的最大程度）。
+- 与此前的 E-4 显示、CoreWiFi 缺失同族：**系统用户态残缺是这类问题的共同根源**，不是驱动可补。
