@@ -132,11 +132,11 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
 - 排除：AWDL（无 AWDL 但拉取侧同网可用）、FileVault 卷锁（卷状态 Unlocked）、applekeystored 服务（running）。
 - 根因：pboard 远程剪贴板"加密创建/上传"调用 **AppleKeyStore 设备状态**，在无 Secure Enclave 的
   Hackintosh 上该 API 结构性失败 → Mac 无法上传剪贴板项（iPhone→Mac 拉取不受 AKS 写入依赖，故单向可用）。
-- 判定（三重实证，2026-11-07 晚更新）：**结构性不可修**。证据链：
-  1) FileVault 关闭后 AKS 错误仍在（失 FV 假设）；
-  2) kickstart applekeystored 无效；
-  3) **M5（Apple 真机，完整 SE）也收不到本机剪贴板** → 上传侧 100% 依赖本机 AKS；
-  4) 本机能接收 M5/iPhone = 拉取侧不依赖 AKS 写入。
-  根因：AppleKeyStore 设备状态依赖 Secure Enclave，x86_64 Hackintosh 无此硬件；
-  与 AWDL、WCM、E-4 同归"Apple 硬件依赖在 Hackintosh 缺位"族。
+- 判定（最终证据链，2026-11-07 终版）：**结构性不可修**。
+  - 已排除：FileVault（关闭后仍失败）、applekeystored kickstart、接力开关（开）、useractivityd 重启。
+  - **useractivityd 日志决定性证据**：能**发现**附近设备（`SFContinuityScanManager Received advertisement`、
+    `foundDevice`），但对端广告载荷 **`flagCopyPasteKey = 0`** → 本机广播**不宣告剪贴板能力** →
+    useractivityd 上传静默不触发 → M5/iPhone 永远收不到（拉取侧正常 = iCloud 路径，不受影响）。
+  - 根因：Apple 私域蓝牙广播的剪贴板能力标志需蓝牙栈专门支持（固件/HCI 私域广告特性）；
+    桥能"发现"但无法"宣告"→ Bluetooth 栈能力层结构性缺失（同族：无 AWDL/无 SE 键）。
 - 替代：微信/文件/网盘；iPhone→Mac 单向可用。
