@@ -48,17 +48,36 @@ sudo bash tools/install-efi.sh
 #    （Kernel/Add 里按顺序加：Lilu(如需要) -> BlueToolFixup -> LegionBtFix -> MtkBt -> MtkWlan -> MtkWlanNative）
 ```
 
-## 功能与实测结果
+## 功能与实测结果（2026-11-07 终审）
 
-- 2.4GHz / 5GHz 关联，WPA2-Personal
-- 802.11ax/HE（含 160MHz，实测协商 2064 Mbps 级别），IPv6
-- TXS 速率遥测、WMM 多队列（标准行为）、RX 重排诊断
-- 固件卡死自动恢复、断线自动重连、睡眠/唤醒驱动重建
-- 原生 Wi-Fi 菜单（需 `MtkWlanNative` + 正确 ABI build）
-- 蓝牙：AirPods 音频稳定（HCI logging 已确认非必需），LE/经典设备
-  （需配套 `BlueToolFixup.kext` + `WTLLegionBtFix`）
+### ✅ 已完成并在本机实测
 
-> "PHY Mode 显示 802.11ac" 是 CoreWiFi 显示层问题（实际为 HE），不影响功能，见 PORTING.md。
+| 域 | 明细 |
+|---|---|
+| 连接 | 2.4/5GHz、WPA2-Personal、802.11ax/HE **80/160MHz**（协商 2064 Mbps），IPv6 |
+| 诊断/队列 | TXS 速率遥测、WMM 多队列、RX 重排、Block-Ack（MtkW9* 属性）|
+| 稳定性 | 睡眠/唤醒（wakeRc=0）、固件卡死自恢复、断线自动重连 |
+| 漫游 | 自研 **RSSI 选强漫游**（多 AP 同 SSID，默认开；delta 8dB / 绝对阈值 -80/-75 / HE 优先 + 诊断统计）|
+| 系统联动 | 解析机场 ROAM_PROFILE 并联动自研漫游参数（`MtkRoamAdvise`，待系统触发自动生效）|
+| 蓝牙 | AirPods A2DP 稳定（无 HCI logging 依赖）、LE/经典设备；BTCOEX 系命令应答（系统端就位）|
+| 系统接口 | **25+ 个 apple80211 命令**正确应答（NSS/信道/PM/漫游配置/BTCOEX/信标…），`MtkNativeRejected` 6200+ → **0** |
+| 界面修正 | **Channel 160MHz 显示**（真实 bug：核心 `bw==3` 落入 else 误报 20MHz，已修）|
+| 工程 | `tools/diag.sh` 一键诊断包、验证矩阵、kcabi 工具链、`UPSTREAM/` 可回馈补丁、REA+Ghidra 逆向栈 |
+
+### ⛔ 未完成功能与技术原因（均实证，非估计）
+
+| 功能 | 为什么无法完成（技术原因）|
+|---|---|
+| **AWDL / AirDrop 传输** | 系统能力 gate 在驱动不可达路径。实证：AWDL 命令零调用、虚拟接口创建零调用（`vif:*` 探针）、erg handler 0 次；AirDrop 发现（BLE）与剪贴板/接力（iCloud）可用，**传输需 awdl0** → 封死 |
+| **PHY Mode 显示"802.11ax"**（标签显示 ac）| 显示判定 = `APPLE80211_IOC_PHY_MODE (0x0E)` 的 `PHYMODE_ACTIVE`；读取该值需 **IO80211NoneProtocol 服务**（vtable 1194 槽中 **1156 纯虚**），第三方内核驱动无法实现该子类 → 架构不可达（实际 HE160 功能正常，仅标签）|
+| **WCM 共存闭环**（BT/WiFi 自动协调）| `WirelessCoexManager` 用户态在 26 **x86_64 生态缺失**（macOS 26 起无官方 Intel 构建；arm64 原生组件不可移植）→ 系统组件缺口，驱动不可补 |
+| **802.11k/v/r 系统级无缝漫游** | 协议由系统（CoreWiFi/airportd）层管；第三方内核驱动无系统接入点。我们以自研 RSSI 漫游 + ROPAM_PROFILE 联动替代（切换为"断+重连"，非 FT 无缝）|
+| **WPA3-SAE / 802.1X / 6GHz** | 家用 WPA2 已够 / 场景不适用 / 中国大陆未开放 6GHz（均为决策不做）|
+| **LE Audio** | 依赖 Apple 蓝牙全栈支持，驱动不可达 |
+| **802.11r 无缝 FT** | 固件 + macOS 无 FT 路径（自研漫游为 1-3 秒断连切换）|
+
+> 显示器路径的精确判定已由 MacBook Air M5 逆向厘清：见 `docs/M5-PHYMODE-REPORT.md`；
+> 全部项目决策与进展见 `OPTIMIZE-ROADMAP.md`、`docs/REVERSE-PATH-ANALYSIS.md`。
 
 ## 日常排障 / 诊断（不重启也能做）
 
