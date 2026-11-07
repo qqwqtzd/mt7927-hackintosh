@@ -187,3 +187,25 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
   若要 WCM x86_64 实体：全量 IESD 镜像 或 本机 26.7.2 cache 提取（Ghidra 解析仍是已踩的坑）。
 - 结论：U 盘对"实体逆向"提供**基础垫脚石**（WiFi 用户态框架 x86_64 可逆），不改变任何
   结构性结论（剪贴板/AWDL/E-4 维持）。
+
+## 十五、WCM 注册条件逆向闭环（bluetoothd 25G332，2026-11-07）
+
+- 实体：`/usr/sbin/bluetoothd`（23.5MB，x86_64+arm64e）→ `~/rea-tools/pkg/entities-25G332/`
+- 方法：python 定位 __cstring 中 `com.apple.WirelessCoexManager`（VA 0x1009919d4）→ RIP-relative
+  LEA xref 扫描（唯一引用 0x100799741）→ lldb 反汇编注册路径。
+- 注册逻辑（反汇编实证）：
+  ```
+  cmpq $0, [GOT 0x100AA3C18]          ; 弱绑定槽检查
+  je   skip                           ; 空 → 打日志跳过注册
+  xpc_connection_create_mach_service("com.apple.WirelessCoexManager", 0, 0)
+  xpc_connection_set_event_handler + resume   ; 存对象+0xa8
+  skip: BTUCM / BTUCMForceFacetimeWifiCoexOverride 配置读取 → 0xb2/0xb4
+  ```
+- 绑定真相（dyld_info -fixups）：`__got 0x100AA3C18 bind WirelessCoexManager/_WCMEnabled [weak-import]`
+- 符号存在性（cache 全串 grep）：**x86_64h 与 arm64e（M5）cache 均无 `_WCMEnabled`** →
+  弱绑定必为 NULL → **macOS 26 全平台（含真机）都不注册该 XPC 服务** —— 与真机行为一致，
+  非 Hackintosh 故障；"WCM 缺失"彻底关闭（无需修）。
+- 附带：kWCMRegisterProcess_ProcessId / kMessageId（WCM 客户端注册协议键，服务不注册故无客户端）、
+  BTUCM 配置读取点。MacCoex 通告独立工作（kCBAdvDataIsCoexDenied=0 实证）不受影响。
+- 方法资产：python Mach-O fat/节解析 + RIP-rel xref 扫描 + lldb 反汇编 + dyld_info 绑定解码 =
+  首个完整"实体→xref→反汇编→绑定→跨平台对照"闭环，后续逆向复用。
