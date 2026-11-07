@@ -190,3 +190,12 @@ Apple 私域广播载荷的"剪贴板能力"位由系统组装；对端看到 0�
 - 终判：**结构性（Secure Enclave 硬件依赖）成立**，证据链=真二进制依赖+符号+双机行为对照；
   上传链、广告位、AKS 三线索归一。剪贴板边界关闭（不消耗重启）。
 - 遗留功效性替代：iPhone→Mac 单向可用（不变）。
+
+## 11. W1/E-4 扫描支路实证收官（2026-11-07 深夜，免重启验证）
+- **P4b 已在 ship 且生效**：提交 d23f0dd（mirror AppleSunrise extended-BSS VHT/HE map，
+  hasHe→HE map=0x0003）随 EFI 0.4.15 运行；system_profiler 已知网络行已出现
+  "PHY Mode: 802.11b/g/n/ac/ax"（HE AP 行）→ 扫描记录支路不欠账。
+- 剩余差异仅"当前活动链路行"（Supported/PHY = a/b/g/n/ac）→ 0x0E 接口聚合（结构性，
+  三轮实验证据）。E-4 全书关闭：网络行已对，当前行结构性。
+- W1 工作簿首份结论：EXTENDED_BSS_INFO（我们答 0xcc/0xd4 map + rate set + RSN）→ 家族
+  扫描记录 PHY 判定 ← 我们全权可控（已验证生效）；无需再改扫描侧。
