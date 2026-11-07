@@ -83,3 +83,37 @@ ACTIVE 必须**只含 0x100**，否则仍显示 ac（M5 报告 §2.1 实证）�
 - 规则：一切 EFI/盘操作使用 `REV/tools/oc-esp.sh`（按 EFI/OC/OpenCore.efi 内容探测）或 UUID
   （OC-ESP PART UUID=ABD015F6-F7EE-4E3A-80D7-3102ECE4BCF8）；不写死 /dev/diskXsY。
 - 误写记录：曾有操作命中 2TB 盘 Windows ESP（disk0s1=当前枚举），未造成实质破坏（结构原样）。
+
+## 11. A/B 方案终局：实证内核补丁风险，E-4 维持结构性（2026-11-07 深夜）
+
+### 结果
+**A 方案（Lilu 内核补丁）失败并已回滚。** 排障中逐层剥出 5 个真实故障，
+第 6 层（内核补丁本身）触发系统不稳定：
+
+| # | 故障 | 修正 |
+|---|---|---|
+| 1 | OC 条目缺 `PlistPath` → `has invalid info` + Halting | 补 PlistPath/Identifier（对 OpenCoreKernel.c:283 核验）|
+| 2 | kext 用 `-r` 链接成 MH_OBJECT → OC 拒收 | 改 `-Wl,-kext`（MH_KEXT_BUNDLE/MH_FILESET）|
+| 3 | 缺独立 `Contents/Info.plist` 文件 | 补文件版（OC 优先读文件）|
+| 4 | 缺 `_kmod_info` 符号 | 编译 kmod_info.c |
+| 5 | `__attribute__((section("__DATA,__lilu")))` 被重写丢失 → Lilu 插件 discover 失败 | 恢复（但仍未触发 pluginStart）|
+| 6 | **kmod `_start` 里打内核补丁 → 系统关机挂起×5** | **回滚** |
+
+### 证据
+- OC 日志：`OC: Prelinked injection MtkPhyFix.kext - Success`（注入层全部成功）
+- 无 kernel panic 文件；`shutdown_stall` × 5（21:37/21:41/21:46/21:53/21:57）
+- `_start` 是 kext 加载最早期，此时 `MachInfo::setKernelWriting` + 直接 memcpy
+  内核代码不安全；且补丁地址无法在运行环境验证
+
+### 结论
+- **E-4 显示层维持"结构性不可修"**，但证据升级为：**内核补丁路径实测会破坏系统稳定性**。
+- 用户可见影响仅为 System Profiler 一行文字（`802.11ac` vs `802.11ax`）；
+  **实际链路运行 HE/160MHz、扫描记录行已正确显示 ax**（d23f0dd）。
+- 回滚完成：ESP 上 kext 与 config 条目均已清除，OC 日志清理至 2 份。
+
+### 长期教训（写入 SECURITY/维护规则）
+- kext 产物三要素：`-Wl,-kext` + 文件版 Info.plist + `_kmod_info`
+- OC 条目五要素：BundlePath / ExecutablePath / PlistPath / Identifier / Enabled
+- 内核内存补丁：不在 `_start` 阶段做；需用 Lilu `onKextLoad`（kext 已加载后），
+  或用户态 interpose（本次未尝试的 A 变体）
+- 盘序漂移：一切 ESP 定位按 root→physical store→ESP 或内容探测
