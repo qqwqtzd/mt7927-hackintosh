@@ -124,3 +124,13 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
 - 与 WCM 同族更新：26.x86_64 生态无官方 Intel 构建 → WirelessCoexManager 用户态在该生态大概率本身缺失；
   E-4 显示标签受 NoneProtocol(~1156 纯虚) 限制。三个"系统侧功能"统一为**系统组件/接入点限制，驱动不可逆**。
 - 项目最终稳定驻留点：全部Functional/Cosmetics 项闭环；见面可交付 = 160MHz 显示修复（真实 bug）。
+
+## 十一、通用剪贴板单向（Mac→iPhone 失败）根因：AKS 安全硬件依赖（2026-11-07）
+
+现象：iPhone→Mac 剪贴板（文字/图片）正常；Mac→iPhone 全部失败。
+- pboard 日志：`AppleKeyStore: failed to open connection (-536870174)`、`AKS: Error: Locked (4294967295)`。
+- 排除：AWDL（无 AWDL 但拉取侧同网可用）、FileVault 卷锁（卷状态 Unlocked）、applekeystored 服务（running）。
+- 根因：pboard 远程剪贴板"加密创建/上传"调用 **AppleKeyStore 设备状态**，在无 Secure Enclave 的
+  Hackintosh 上该 API 结构性失败 → Mac 无法上传剪贴板项（iPhone→Mac 拉取不受 AKS 写入依赖，故单向可用）。
+- 判定：**结构性不可修**（安全硬件依赖）；与 AWDL、F-4、WCM 同归"Apple 硬件依赖在 Hackintosh 缺失"族。
+- 替代：微信/文件/网盘。已验证：kickstart applekeystored 无效。
