@@ -61,7 +61,8 @@
 3. **蓝牙共存联动 —— 逆向确认存在链路，触点=IO80211 BTCOEX**（2026-11-07）：
    airportd `setBluetoothCoexProperty` 校验 entitlement + key 白名单后织 `CWRequest(setType:0x13)` → scheduler
    → 下发给 WiFi 驱动（BTCOEX 系 ioctl，我们已 accept）。剩余未知：bluetoothd 侧是否主动上报（待逆向 bluetoothd）。
-4. **【后期·高】11k/v/r 系统衔接**（#4）：airportd 完整可逆，与自研漫游权衡。
+4. **【中期·中】漫游配置联动（#4 平价化）**：系统漫游=档案驱动（CWRoamingProfileConfiguration → ROAM_PROFILE），
+   链路已到我们 accept 的 setROAM_PROFILE；可做=解析 profile 联动自研漫游参数（RoamDelta/AbsRssi），无协议复杂度。
 5. **不做**：E-4 显示（框架缺失）、LE Audio、AWDL（封死）、6GHz/WPA3/802.1X。
 
 ## 六、结论
