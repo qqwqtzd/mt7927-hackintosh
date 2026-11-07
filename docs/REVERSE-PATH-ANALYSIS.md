@@ -167,3 +167,23 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
 - 但引出修正：本机 dyld cache 含 `WirelessCoexManager` 镜像（主文件+分片），磁盘 stub 为正常结构；
   `bluetoothd Server.MacCoex` 持续上报 `isCoexDenied=0` → **BT/WiFi 共存通告在工作**，
   "WCM 缺失"不再成立；该项从"不可修"改为"无需修"。
+
+## 十四、U 盘恢复镜像评估：首个可解析 x86_64 独立实体（2026-11-07）
+
+- U 盘（disk5/1401，FAT32 引导盘）结构：EFI + NullMoth + com.apple.recovery.boot
+  （BaseSystem.dmg 847MB）+ 13.6GB 未用空间；**无 InstallESD、无第二分区**（网络安装型引导盘）。
+- BaseSystem = **macOS 15.6.1 (24G90) Sequoia x86_64**（非 26.7.2；跨版本契约参考级价值）。
+- 提取到 `~/rea-tools/pkg/usb-extract/`：**CoreWiFi.framework（4.4MB，独立 x86_64）、
+  IO80211.framework（606KB）、WiFiPolicy、BluetoothManager** —— 首个不受 dyld cache
+  解析失败阻隔、可直接进 Ghidra 的实体。
+- 快速三检产出：
+  1) `CWFComparePHYMode` 反汇编：PHY 序数比较含 0x100/0x80 哨兵（15.6.1 已有该比较器）；
+     E-4 卡点在内核 NoneProtocol 纯虚，用户态 PHY 逻辑正常 → 与判定不冲突。
+  2) IO80211.framework 导出仅 `Apple80211GetRangingPhyErrorString`（无 PHY getter）→
+     佐证 E-4：PHY 模式源在内核 IO80211Family，用户态本无该服务。
+  3) WiFiPolicy 含 `BTCoex/AWDLCoex/RC1Coex` 内核采样类 → 独立佐证共存路径在内核侧工作
+     （与十三节 WCM 修正一致）。
+- 缺口：WirelessCoexManager 主二进制仍无（恢复镜像不含；bluetoothd 侧也未见引用字符串）。
+  若要 WCM x86_64 实体：全量 IESD 镜像 或 本机 26.7.2 cache 提取（Ghidra 解析仍是已踩的坑）。
+- 结论：U 盘对"实体逆向"提供**基础垫脚石**（WiFi 用户态框架 x86_64 可逆），不改变任何
+  结构性结论（剪贴板/AWDL/E-4 维持）。
