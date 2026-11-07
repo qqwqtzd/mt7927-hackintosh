@@ -113,3 +113,14 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
 | 6 | F-6 省电 / P-2 多 TX | 评估维持 | — | 维持 |
 
 **新三选项**：① E-4 PHY：实现 NoneProtocol 子类（本机逆向可解）；② WCM：找同版 x86_64 框架源（资源型）；③ AWDL：观测探针（一次重启）。
+
+
+## 十、AWDL 探针实测结论（2026-11-07 晚，重启验证）
+
+- 在 `MtkWlanNative`（IO80211Controller）override `enableVirtualInterface / disableVirtualInterface /
+  createVirtualInterface / attachVirtualInterface / detachVirtualInterface`（仅日志，行为走基类）。
+- 重启后整段运行：**MtkNativeTrace 无任何 `vif:*` 记录、awdl0 未出现** → 系统对第三方内核 Controller
+  **从不请求创建 Wi-Fi 虚拟接口** → AWDL/awdl0 在第三方驱动上通关失败（能力 gate 实证）。
+- 与 WCM 同族更新：26.x86_64 生态无官方 Intel 构建 → WirelessCoexManager 用户态在该生态大概率本身缺失；
+  E-4 显示标签受 NoneProtocol(~1156 纯虚) 限制。三个"系统侧功能"统一为**系统组件/接入点限制，驱动不可逆**。
+- 项目最终稳定驻留点：全部Functional/Cosmetics 项闭环；见面可交付 = 160MHz 显示修复（真实 bug）。
