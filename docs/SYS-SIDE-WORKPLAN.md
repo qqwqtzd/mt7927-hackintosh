@@ -44,3 +44,14 @@ CoreWiFi 4.4MB / IO80211 606KB / WiFiPolicy / BluetoothManager
 
 ## 3. 约束
 - 分析免费、可后台；实验每 1 次重启一测；变更全在 kext 侧；不做 6GHz/WPA3/11kvr/LE Audio/AWDL。
+
+## 审计修正（2026-11-07 深夜，ipsw 3.1.743 实证）
+- **重大修正**：payloadv2 并非"仅恢复/引导块"——`ipsw ota payload` 解析 payload.001 得
+  **72,908 条 = 26.7.2 全量用户态文件树**（System/Library/Frameworks/PrivateFrameworks 等）。
+  之前的 payloadv2.bom 仅为"boot/restore 包"子清单（顶层 boot 2311 / payloadv2 121 /
+  Restore 28 / usr 6），不覆盖完整 OTA 文件树 → 原"pkg 无用户态实体"结论作废，
+  改为：**完整系统实体 = zip 内 AssetData/payloadv2/payload.NNN（pbzx/OTA 页压缩）**。
+- 渠道设施：ipsw 3.1.743（x86_64）经本地代理 127.0.0.1:7893 下载，装于 ~/rea-tools/bin/；
+  下载规范见 ~/rea-tools/notes/net-mirrors.md（GitHub 一律走代理/镜像）。
+- 目标：提取 WirelessCoexManager / CoreWiFi / WiFiPolicy / Sharing / IO80211 / bluetoothd /
+  useractivityd / pboard 等 26.7.2 独立实体 → REV/fw26/。
