@@ -1,0 +1,58 @@
+# A 方案设计：E-4 活跃行显示修复（用户态 Lilu 插件）+ 发布形态升级
+
+> 状态：已批准（2026-11-07）；机制前提本机已具备（Lilu 1.7.3 + AMFIPass 1.4.1 在载，
+> csr Custom 0xAC0，EFI 注入体系在位）；Kext 注入 /Library/Extensions+AKC 先例已存在（NVRM 等）。
+
+## 1. 目标
+- 系统层面"当前活动链路 PHY Mode"从 `802.11ac` 修正为 `802.11ax`（System Settings / system_profiler）。
+- 顺带：发布形态升级为"系统内安装（AKC）+ 一键卸载回滚"。
+
+## 2. 机制（用户态 interpose，非内核补丁）
+
+```
+Lilu（已注入各进程）→ 我们的插件 kext（MtkPhyFix）注册 FunctionHook
+  └─ hook 私有 API：_Apple80211CopyValue（IO80211.framework 导出）
+       ├─ 当 key == 0x0E（PHY_MODE）且返回 CFDictionary：
+       │    PHYMODE_ACTIVE   := 0x100（单一位！避免 ac 先命中规则）
+       │    PHYMODE_SUPPORTED:= 0x19E（含 0x100；不含 0x200）
+       └─ 其余调用原样透传
+```
+
+改写遵循 CoreWLAN `activePHYMode` 的"先命中先返回"位序（0x80 在 0x100 之前检查）：
+ACTIVE 必须**只含 0x100**，否则仍显示 ac（M5 报告 §2.1 实证）。
+
+## 3. 插件规格（MtkPhyFix.kext）
+- 基础：Lilu 1.7.3+ 插件（普通 kext，链接 Lilu 导出符号；SDK 取自本机 EFI 的 Lilu.kext）
+- Hook 目标：`_Apple80211CopyValue(Apple80211Ref, key, p1, &CFDictionary, flags)`
+- 作用域：key==0x0E 且字典含 PHYMODE_ACTIVE/PHYMODE_SUPPORTED；其余透传
+- 不碰：CARD_CAPABILITIES、扫描记录、其它 key
+
+## 4. 加载方式（发布形态）
+- 一期（验证）：kext 放入 EFI/OC/Kexts（现有注入体系，无需 AKC 变更）
+- 二期（发布形态）：`/Library/Extensions` + `kmutil rebuild`（AKC）+ 安装/卸载/回滚脚本
+  （仿 NullMoth 1401 的可用性目标；本机已有 NVRM 等 AKC 先例）
+- 卸载/回滚：移除插件的注入/AKC 项 + 重启 ✓
+
+## 5. 验证矩阵
+| 观察面 | 预期 |
+|---|---|
+| system_profiler SPAirPortDataType 当前网络行 | `PHY Mode: 802.11ax`、Supported 含 ax |
+| 系统设置 → Wi-Fi → 当前网络详情 | 同上 |
+| phyprobe（独立二进制，不受注入影响）| 仍显示 ACTIVE=0x80 —— **对照组**，证明补丁作用域仅在目标进程（文档将该行标为对照预期）|
+| 扫描记录网络行 | 保持 ax（原有 d23f0dd 修复，不受影响）|
+| 卸载插件重启 | 回到 ac（可逆）|
+
+## 6. 风险与回滚
+- 风险：低（用户态 hook；最坏=Profiler/设置页读取异常，可回滚）
+- 回滚：移除 EFI 注入项或 AKC 项 + 重启；全程不改系统二进制
+- 兼容：Lilu 大版本更新时插件 API 微调（成本低）；系统大版本需重编译
+
+## 7. 里程碑
+- M1 插件工程（手工 skeleto：LiluAPI + FunctionHook，不做 Xcode 工程，沿用项目 clang kext 编译线）
+- M2 装载 + 重启 + 验证矩阵（1 次重启）
+- M3 发布形态（AKC 安装/卸载/回滚脚本 + 文档）
+- M4 SECURITY 扫描 + 推送
+
+## 8. 纪律
+- 改动域：[K] kext（插件本身）+ 安装脚本；不碰系统二进制
+- 实验 1 重启一测；失败即回滚
