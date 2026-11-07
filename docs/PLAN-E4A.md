@@ -28,6 +28,10 @@ ACTIVE 必须**只含 0x100**，否则仍显示 ac（M5 报告 §2.1 实证）�
 - 不碰：CARD_CAPABILITIES、扫描记录、其它 key
 
 ## 4. 加载方式（发布形态）
+- M2 装机已完成（2026-11-07 20:17）：MtkPhyFix.kext 入 EFI/OC/Kexts + config.plist Kernel/Add:15
+  （备份 config.before-mtkphyfix-20261107-201708）
+
+## 4. 加载方式（发布形态）
 - 一期（验证）：kext 放入 EFI/OC/Kexts（现有注入体系，无需 AKC 变更）
 - 二期（发布形态）：`/Library/Extensions` + `kmutil rebuild`（AKC）+ 安装/卸载/回滚脚本
   （仿 NullMoth 1401 的可用性目标；本机已有 NVRM 等 AKC 先例）
@@ -38,9 +42,12 @@ ACTIVE 必须**只含 0x100**，否则仍显示 ac（M5 报告 §2.1 实证）�
 |---|---|
 | system_profiler SPAirPortDataType 当前网络行 | `PHY Mode: 802.11ax`、Supported 含 ax |
 | 系统设置 → Wi-Fi → 当前网络详情 | 同上 |
-| phyprobe（独立二进制，不受注入影响）| 仍显示 ACTIVE=0x80 —— **对照组**，证明补丁作用域仅在目标进程（文档将该行标为对照预期）|
-| 扫描记录网络行 | 保持 ax（原有 d23f0dd 修复，不受影响）|
+| phyprobe（独立二进制）| 同步 ACTIVE=0x100 —— 内核钩子作用域=全部读方一致（对照组概念升级为全一致）|
+| 扫描记录网络行 | 保持 ax（不受影响）|
 | 卸载插件重启 | 回到 ac（可逆）|
+
+> 说明：采用内核 routeFunction 后，内核读路径全部（Profiler/设置/phyprobe）统一为 ax；
+> 这是"作用域=内核层"一致的验证口径。
 
 ## 6. 风险与回滚
 - 风险：低（用户态 hook；最坏=Profiler/设置页读取异常，可回滚）
