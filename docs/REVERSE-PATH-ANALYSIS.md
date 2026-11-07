@@ -38,11 +38,11 @@
 
 ## 四、关键机会逐条评估
 
-### 2. E-4 显示 802.11ax（最值得推）
-- 现象：`system_profiler` 显示当前网络 PHY=802.11ac，但 `MtkW8Mode`=HE 160MHz（实际 11ax）。
-- 判定在 **CoreWiFi/airportd 用户态**：它们根据 `CARD_CAPABILITIES` 的 PHY-mode 字 + 链接时的 PHY 状态（IOReport/`CMD_...`）推导。
-- 我们已自报 Wi-Fi 6E 能力字（getCARD_CAPABILITIES d[0x0e-0x10]），但显示仍 ac → 说明**另一处判定**（关联时传递的 PHY/IOReport）。逆向 CoreWiFi 的 `physicalLayerMode` 计算可定位所需属性。
-- **可行性中、风险低**（只动驱动属性），是本阶段最贴合"逆向原生服务→驱动配合"的样例。
+### 2. E-4 显示 802.11ax —— 已判为"框架缺失"，驱动侧无解（修正）
+- 实测（2026-11-07 全对象侦查）：`CoreWiFi.framework` 与 `IO80211.framework` 主二进制**不存在**（symlink 悬空、
+  airportd weak 链接容忍、全盘无 dyld shared cache）。用户态 Wi-Fi 判定层在本机（Hackintosh 精简构建）**先天残缺**。
+- 因此"显示 802.11ax"等依赖 CoreWiFi 的功能**无法由驱动修复**（对象不存在），只能"驱动尽力上报 + 接受显示局限"。
+- 已尝试的能力属性（CARD_CAPABILITIES Wi-Fi 6E 字）无效即源于此——系统判定根本没人读。
 
 ### 5. 蓝牙 Handoff/邻近
 - 已实测：通用剪贴板/接力走 iCloud，AirDrop 发现（BLE）正常但传输（AWDL）失败。
@@ -51,13 +51,16 @@
 ### 4. 漫游系统衔接
 - 我们已有自研漫游（RSSI，工作正常）。系统 WCL 槽（11k/v/r）若认领，可让系统漫游逻辑（airportd 下发 roam profile）与我们的配合，但工作量大、收益待定（自研已够用）。
 
-## 五、推荐路线（按性价比排序）
+## 五、推荐路线（修正后，基于"全对象侦查"）
 
-1. **【短期·高】补齐 IO80211 剩余 get 类**（#1）：BEACON_INFO、CONNECTION_ID、PLATFORM_CONFIG、BTCOEX_ACTIVE 等——方法已验证、低风险、无需新逆向。
-2. **【中期·中】E-4 显示攻坚**（#2）：逆向 CoreWiFi 的 PHY 判定，驱动属性对齐。目标明确、风险低、收益是"显示正确性"。
-3. **【中期·中】蓝牙 Handoff/邻近可行性确认**（#5）：先逆向确认通路，再决定投入。
-4. **【后期·高成本】11k/v/r 系统衔接**（#4）：与自研漫游权衡后再定。
-5. **不做**：LE Audio（全栈威…）、AWDL（封死）、6GHz/WPA3/802.1X（已排除）。
+**全对象侦查结论**：完整且可逆向 = `IO80211Family`（内核，全量）、`airportd`、`rapportd`；
+`CoreWiFi/IO80211/BT` 用户态框架在本机**缺失**（空壳+弱链接）→ 相关"系统判定型"功能（如显示层）驱动侧无解。
+
+1. **【短期·高】补齐 IO80211 剩余 get 类**（#1）：BEACON_INFO、CONNECTION_ID、PLATFORM_CONFIG、BTCOEX_ACTIVE 等——方法已验证、低风险。
+2. **【中期·中】认证增强**（PMKID/FT 辅助，#3）：IO80211 槽，无用户态依赖。
+3. **【中期·中】蓝牙 Handoff/邻近**（#5）：BT 用户态残缺下先做可行性侦查（BlueTool 桥 + airportd 共存上报）。
+4. **【后期·高】11k/v/r 系统衔接**（#4）：airportd 完整可逆，与自研漫游权衡。
+5. **不做**：E-4 显示（框架缺失）、LE Audio、AWDL（封死）、6GHz/WPA3/802.1X。
 
 ## 六、结论
 
