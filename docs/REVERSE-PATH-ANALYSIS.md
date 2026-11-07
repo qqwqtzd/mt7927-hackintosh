@@ -88,3 +88,15 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
   同 CoreWiFi/IO80211.framework 命运：本机（Hackintosh 精简构建）用户态组件残缺。
 - 因此共存内容**推不到驱动**；我们驱动 BTCOEX 系列 accept 已就位（第三方能做的最大程度）。
 - 与此前的 E-4 显示、CoreWiFi 缺失同族：**系统用户态残缺是这类问题的共同根源**，不是驱动可补。
+
+
+## 八、E-4 收尾：Channel 已修、PHY 标签判定路径定位（2026-11-07，含 M5 真机对照）
+
+- **Channel 带宽显示（真 bug）已修复**：核心把 160MHz 上报为 `bw==3`，前端 `linkChannelFlags`
+  缺 3 分支 → 误报 20MHz；补 `bw==3 → 0x800`（itlwm `APPLE80211_C_FLAG_160MHZ`）后显示 160MHz ✅。
+- **PHY Mode 标签（ac→ax）判定路径**（M5 cache 方法名表逆向确认）：CoreWiFi 有
+  `physicalLayerMode / supportedPhysicalLayerModes / supportsPHYMode`；
+  当前 PHY 判定最可能经 `getPHY_MODE`（active_phy_mode）的 `IO80211NoneProtocol` 服务——**前端无该服务接入点**，
+  系统按不支持回退 ac。与 AWDL/WCM 同为"系统判定路径对第三方驱动不可达"，驱动侧无解；标注为接受项。
+- M5（macOS 27.2 arm64）对照：原生显示 ax + 160MHz，驱动为 DriverKit `AppleCentauriAlpha`。
+- 结论更新：**E-4 修正**——初期"CoreWiFi 缺失"判错（实现在 dyld cache）；实际为第三方驱动无法接入其判定服务。
