@@ -230,3 +230,17 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
     HE_CAPABILITY 应答 / 接口 PHY getter），再做最终驱动侧修复（预计还需 1 次重启）。
 - 结论暂记：E-4 前判"结构性不可修"依据（NoneProtocol 纯虚）与显示链（ioctl 0x0E 字典）
   为**两条不同路径**；显示路径存在驱动侧杠杆（待 Ghidra 定论），维持"可修候选"状态。
+
+### E-4 第三轮（实验 B）与终判（2026-11-07 深夜）
+- 实验 B：handleCardSpecific 应答 HE_CAPABILITY(0x23a)（版本=1 + 偏移 +4/+8/+0xc/+0x10 置 HE
+  位，依据 kc 反编译的真机 BCM 解析锚点）；装机重启后探针仍 PHYMODE_ACTIVE=0x80/
+  SUPPORTED=0x9F → 无效果；且运行时 IORegistry 无 "he:card" trace → **家族自始至终未调用
+  该卡特定通道** → 该输入与聚合无关（排除）。
+- 至此驱动侧表面三轮全排除：CARD_CAPABILITIES PHY 字(0x0e/0x0f，补 ax 位无效)、
+  CARD_CAPABILITIES HE 位(0x09)（原样镜像 BCM 常数）、卡特定 HE_CAPABILITY 应答（未被调用）。
+- kc 全量逆向（Ghidra，12006 函数）补充证据：内核空间无 PHYMODE_* 字面键（用户态建键填值）、
+  family 文本无 phyMode 类符号；聚合值 = 接口内部数值态。真机(M5)显示含 ax（system_profiler
+  实证）依赖 family/接口内部机制，非第三方控制器可及。
+- **终判：E-4 维持"结构性不可修"**，证据从早期"NoneProtocol 纯虚"推断升级为
+  "驱动侧 apple80211 表面三层排除 + kc 全量反证"；phyprobe 为恒久复测工具。
+- 实验 A/B 改动为真实性声明（MT7927 确为 HE/ax 能力），保留无害；如需回退可随时（代价 1 重启）。
