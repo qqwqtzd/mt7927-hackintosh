@@ -162,13 +162,14 @@
 - AC 弱信号剔除全关 → 不会 deauth 赶人
 - **因此 RSSI 漫游（MtkW5Roam）是这台机器唯一生效的漫游路径**，必须保持开启
 
-### 4. 参数对齐建议（下次装机生效）
+### 4. 参数对齐（已实施，2026-11-07，commit 22c0dc9，EFI 已装）
 
-| 参数 | 现值 | 建议 | 理由 |
-|---|---|---|---|
-| MtkRoamDelta | 12 dB | **8 dB** | 对齐 AC `roaming_dif=8`；12dB 门槛偏高，4 AP 同频错开不明显时可能"该切不切" |
-| （可选项）绝对阈值 | 无 | 5G<-80 / 2.4G<-75 才评估（同 AC 阈值）| 减少固定位置双 AP 间无效评估（配合 20s cooldown）|
+| 参数 | 新值 | 说明 |
+|---|---|---|
+| MtkRoamDelta | **8 dB** | 对齐 AC `roaming_dif=8` |
+| MtkRoamAbsRssi / MtkRoamAbsRssi24 | **80 / 75**（dBm 幅值，0=关）| 当前 AP 低于阈值才评估漫游，镜像 AC -80/-75 策略 |
+| MtkRoamPreferHe | **true** | 3 dB 平局窗口内优先 HE（AX3000 胜 AC1200）|
+| MtkW5RoamEvals | 发布 | 漫游评估计数诊断（ioreg 可看）|
 
-- 备选说明：不改代码即可用 `mtkroam=1` 与 plist 键调参；改绝对阈值需在 MtkJoin.cpp 加一个属性。
-- **可选增强（信号接近时优先 AX AP）**：ch36 同时有 AC1200（867Mbps）与 AX3000（2402Mbps），
-  当前候选只看 RSSI；RSSI 差 < delta 时优先 HE 能力 AP 可白赚速率。列为待评估。
+- 逻辑验证：10 个 host 场景（阈值阻挡/HE 决胜/平局/2.4G 阈值等）全过 + 全套 host 测试绿。
+- 生效条件：重启（kext 随 EFI 加载）。回滚：EFI 里 `MtkWlan.kext.before-20261107-104113`。

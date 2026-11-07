@@ -39,6 +39,8 @@
 
 - [ ] F-1 **802.1X 企业网** —— 家用不适用，**不做**
 - [x] F-2 **Wi-Fi 漫游（多 AP 选强）** ✅ 实测触发（MtkW5Roam +2，链路稳定）：多台同 SSID 时自动切到更强的 AP
+  - 2026-11-07 调参：MtkRoamDelta 12→8（对齐 AC roaming_dif）、绝对阈值 -80/-75（MtkRoamAbsRssi*）、
+    3dB 窗口 HE 优先（MtkRoamPreferHe）、发布 MtkW5RoamEvals 诊断
       （实现为 **RSSI 选强漫游**，默认常开 MtkRoam；**非** 802.11r 无缝 FT——MT7925/27 固件+macOS 无 FT 路径，见分析文档）收益中高，风险中，1 次重启
 - [ ] F-3 **WPA3-SAE + PMF** —— 家用 WPA2 已够，**不做**（密码学+P-256，数月）
 - [ ] F-4 **6GHz / Wi-Fi 6E** —— 中国大陆不开放，**不做**（监管不允许）
