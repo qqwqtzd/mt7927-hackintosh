@@ -63,6 +63,9 @@ sudo bash tools/install-efi.sh
 ## 日常排障 / 诊断（不重启也能做）
 
 ```bash
+# 一键打包全部诊断（出问题时跑这个，把 zip 交给维护者/AI 分析）
+bash tools/diag.sh                    # -> ~/Desktop/mtkwlan-diag-<时间戳>.zip
+
 # 盯一个属性
 ioreg -r -c MtkWlan -l -w0 | grep -E 'MtkState|MtkW8Mode|MtkW6TxFailed'
 

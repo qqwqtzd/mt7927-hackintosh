@@ -36,7 +36,7 @@
 3. 改内核代码 + 重新构建 + tests 全绿
 4. install-efi.sh（自动备份+恢复包）
 5. 用户重启 → 自动采集 out/autotest/<time>.txt（若装了 LaunchAgent）
-   或让用户跑 ioreg / 粘贴快照
+   或让用户跑 `bash tools/diag.sh`（一键 zip：ioreg 全量/日志/网络/蓝牙）
 6. 以快照为准回环，不要一个属性猜到底
 ```
 
