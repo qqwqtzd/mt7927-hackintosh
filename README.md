@@ -15,7 +15,7 @@
 | 移植笔记 | `PORTING.md` | 逐项改动与 Linux 对照（含已知限制）|
 | 优化清单 | `OPTIMIZE-ROADMAP.md` | 完成项与待定项 |
 | 芯片能力分析 | `MT7927-CAPABILITIES.md` | MT7927/Wi-Fi7 规格、驱动现状、完善方案 |
-| 漫游/AWDL 分析 | `ROAM-AWDL-ANALYSIS.md` | 方案分析（暂未实施）|
+| 漫游/AWDL 分析 | `ROAM-AWDL-ANALYSIS.md` | 方案分析；驱动侧 RSSI 选强漫游已实现（见完成区），系统层 11k/v/r、AWDL 未做 |
 | 已构建产物 | `dist/` | kext + 固件（发布用）|
 
 > 三个 `WTLMtkWireless/` 等子目录为独立 git 仓库（本仓库对其跟踪说明）；
@@ -86,7 +86,8 @@ sudo bash tools/restore-kexts.sh            # 回滚 MtkWlan 到上一稳定版 
 
 ## 已知限制
 
-- WPA3-SAE / 802.1X 企业网 / 漫游(802.11k/v/r) / 6GHz / AWDL(隔空投送) 未实现（见 OPTIMIZE-ROADMAP.md）
+- WPA3-SAE / 802.1X 企业网 / 6GHz 实质连接 / AWDL(隔空投送) / 802.11r 无缝切换(FT) 未实现（见 OPTIMIZE-ROADMAP.md）
+  （多 AP 同 SSID 的 **RSSI 选强漫游已实现并默认开启**，见 OPTIMIZATION-GUIDE-zh.md 完成区；非 802.11r 无缝）
 - 驱动二进制随 EFI 更新，修改代码后需重启生效（macOS kext 机制）
 - `MtkWlanNative` 只接受指定 macOS build（ABI 校验），其它 build 请用 Ethernet 前端
 
