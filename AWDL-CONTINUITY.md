@@ -134,3 +134,33 @@ macOS 的 AWDL 由 **IO80211Family 系统栈垄断**，AirDrop 走系统 UI/分�
 > 与 mt7927-airdrop(Linux) 的关键差异确认：**macOS 上协议在系统栈**，不做自研 OWL；
 > 但芯片级手段（固件 RX BA / STA 记录 / 隐藏 AP 承载）两边一致，MT7927 硬件可行已由
 > 该 Linux 项目证实。逆向材料（70 ioctl + PeerManager) 使我方"实现驱动接口面"路线明确。
+
+## 八、实现蓝图 v1（基于逆向，2026-11-07）
+
+### 已确认的事实链
+
+```
+用户态(rapportd/apsd/airportd) --(ioctl)--> IO80211Family
+  IO80211AWDLPeerManager(协议/选举/时序，系统内置)
+        |  via IO80211VirtualInterface (awdl0)   (IO80211Controller::setAwdlInterface 登记宿主)
+        v
+  底层驱动 = IO80211Controller 子类 (AppleBCMWLANCore / 我们的 MtkWlanNative)
+        |  响应 70 个 apple80211get/setAWDL_* skywalk ioctl + controller 槽
+        v
+  芯片: 多接口/虚BSSID/切信道(按 channel sequence)/sync frame 收发/给 peer 建硬件 BA·STA
+```
+
+- 我们的 `MtkWlanNative : public IO80211Controller` → **有资格实现 setAwdlInterface 等控制器槽**
+- 但 ABI 里 vtable > 462 的槽我们未 dump → **IO80211Family 需要的 AWDL 控制器槽（如 0x10d0=538）我们的 vtable 空着** → 系统调用落空 → 只见"被拒 ioctl"（0x161 家族 1025 次）
+
+### 最小验证实验（下一步，可回滚）
+1. 在 MtkWlanNative 实现 2~3 个薄 AWDL ioctl handler（如 set/getAWDL_BSSID、CONFIG、SYNC_ENABLED）：
+   接受结构体、记录属性/日志、返回成功——先"让系统认为我们接住了"
+2. 实现 `IO80211Controller::setAwdlInterface` 槽（记录被调用的接口指针）
+3. 装 EFI 重启，观测：awdl0 是否出现 / PeerManager 是否开始推进 / 系统是否请求更多 AWDL ioctl
+⇒ 一次重启就能判定"系统是否接受第三方驱动走 AWDL 路径"。若推进，再按 PeerManager 需求逐项补齐。
+
+### 工作量分档（最终）
+- 实验/验证阶段：1 次重启，风险可控（新代码不影响现有 STA）
+- 完整 AWDL（若实验为真）：70 ioctl 薄转发 + controller 槽 + 芯片能力（多接口/切信道/BA/STA）+ wifi 侧多接口分时 → **数周级**，但系统栈承担协议全部心智，路线确定
+- 仍保留的不可知因素：IO80211Family 是否在 runtime 校验驱动"原生性"（若强制校验则第三方无解——实验可揭晓）
