@@ -55,3 +55,13 @@ CoreWiFi 4.4MB / IO80211 606KB / WiFiPolicy / BluetoothManager
   下载规范见 ~/rea-tools/notes/net-mirrors.md（GitHub 一律走代理/镜像）。
 - 目标：提取 WirelessCoexManager / CoreWiFi / WiFiPolicy / Sharing / IO80211 / bluetoothd /
   useractivityd / pboard 等 26.7.2 独立实体 → REV/fw26/。
+
+## 4. 工作簿状态（2026-11-07 深夜终版）
+
+| 簿 | 状态 | 结论要点 |
+|---|---|---|
+| W1 IO80211Family | ✅ 收官 | 扫描记录 PHY 支路已生效（ship）；漫游链=调参消费实证+advise 系统静默；E-4 拆分关闭 |
+| W2 bluetoothd 广播面 | ✅ 收束 | 广告位=SE 签名门控（与 W3 同源）；WCM 注册=设计行为（双机 vmmap） |
+| W3 sharingd/useractivityd | ✅ 收束 | CopyPaste 位谓词定位部件级；AKSRefBSignParam 依赖实锤 → 结构性 |
+| W4 CoreWiFi/WiFiPolicy | ✅ 收束 | RATES/PHY 位表 25G332 实证；扫描记录键由我们 EXTENDED_BSS_INFO 喂入（已生效） |
+| W5 Skywalk/AWDL | ✅ 收束 | 结构性边界档案完整（无 AWDL 子系统；P2P 桥评级低，不启动） |

@@ -124,3 +124,19 @@ sudo bash tools/restore-kexts.sh            # 回滚 MtkWlan 到上一稳定版 
 - Linux mt76 / btmtk 参考：ISC / BSD-3-Clause-Clear
 - MediaTek 固件：MediaTek 许可（`LICENSES/LICENCE.mediatek`）
 - 分发二进制时保留 LICENSE / NOTICE / LICENSES
+
+## 系统侧边界终审（2026-11-07 深夜，逆向资产全量就绪后）
+
+> 详档：`docs/REVERSE-PATH-ANALYSIS.md` + `docs/FEASIBILITY-PATHS.md`；资产：`REV/`。
+
+| 功能 | 终审结论 | 证据等级 |
+|---|---|---|
+| 剪贴板 Mac→iPhone | **结构性**：sharingd 的 CopyPaste 位由 AppleKeyStore **SE 会话签名**门控（符号级 `AKSRefBSignParam`）；无 SE 必然位 0、系统从不发起上传，真机行为一致 | 真二进制依赖+符号 |
+| 蓝牙私域广播能力位 | 同源：广告位=SE 签名能力宣告；HCI 位/SFDeviceSupportsContinuity 均排除 | 反汇编 |
+| AWDL / AirDrop / 随航 | 结构性（无 AWDL 无线子系统）；P2P 桥方案可行性极低（<20%，月级） | 档案闭合 |
+| WCM 服务注册 | **设计行为**：bluetoothd 弱引用 _WCMEnabled（真二进制导出存在），但启动闭包双机（本机+M5）均不加载 → 全平台不注册；MacCoex 正常工作 | vmmap 双机+真件 |
+| E-4 扫描记录行 | ✅ **已 ship**：网络行显示 `b/g/n/ac/ax`（d23f0dd HE map 修补） | 实机 Profiler 行 |
+| E-4 当前链路行 | 结构性：0x0E 接口内部聚合（三轮实验否定驱动表面） | 探针+kc 全量 |
+| 漫游 advise 触发 | **系统设计静默**：自适应漫游真机同样零活动（M5 日志仅类注册）；ROAM_PROFILE(0xd8×1)+WCL 配置(0x1ae×2)实证在消费我们的调参 | 计数器+双机日志 |
+
+**工程纪律不变**：变更只在驱动/kext/数据层；实验 1 重启一测；6GHz/WPA3/11kvr/LE Audio 不做。
