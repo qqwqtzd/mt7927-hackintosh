@@ -10,7 +10,7 @@
 | Wi-Fi | ✅ 2.4/5GHz + HE 160MHz（协商 2064Mbps）+ WPA2 + IPv6，`W6 pass` 稳定 |
 | 蓝牙 | ✅ AirPods A2DP（无 HCI logging 依赖）、LE/经典设备，`ready` |
 | 漫游 | ✅ 自研 RSSI 漫游上线并调参（多 AP 实测切换）；系统 profile 联动已接线（待系统触发）|
-| 系统接口 | ✅ 25+ 个 apple80211 命令应答，`MtkNativeRejected` 6200+ → 0（仅余 0x100 单次）|
+| 系统接口 | ✅ 25+ 个 apple80211 命令应答，**`MtkNativeRejected` = 0**（6200+ → 全放行闭环）|
 | 恢复/诊断 | ✅ EFI 自动备份 + Windows 侧一键恢复；`tools/diag.sh` 一键诊断包 |
 | 工具链 | ✅ REA + Ghidra 逆向栈（IO80211Family 全量映射 361 探针码已存档）|
 | 发布 | ✅ 文档全套归档；GitHub 4 仓库已推送（本地=远端）|
