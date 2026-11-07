@@ -58,9 +58,9 @@
 
 1. **【短期·高】补齐 IO80211 剩余 get 类**（#1）：BEACON_INFO、CONNECTION_ID、PLATFORM_CONFIG、BTCOEX_ACTIVE 等——方法已验证、低风险。
 2. **【中期·中】认证增强**（PMKID/FT 辅助，#3）：IO80211 槽，无用户态依赖。
-3. ~~蓝牙 Handoff/邻近~~ —— **已侦查判不可行**（2026-11-07）：airportd 共存链路为蓝牙→airportd XPC
-   （acquireBluetoothPagingLock/setBluetoothConnectionReport/setULOFDMA…），驱动仅是扫描/连接的被动对象，
-   无驱动触点；联动需改 bluetoothd（不做）。
+3. **蓝牙共存联动 —— 逆向确认存在链路，触点=IO80211 BTCOEX**（2026-11-07）：
+   airportd `setBluetoothCoexProperty` 校验 entitlement + key 白名单后织 `CWRequest(setType:0x13)` → scheduler
+   → 下发给 WiFi 驱动（BTCOEX 系 ioctl，我们已 accept）。剩余未知：bluetoothd 侧是否主动上报（待逆向 bluetoothd）。
 4. **【后期·高】11k/v/r 系统衔接**（#4）：airportd 完整可逆，与自研漫游权衡。
 5. **不做**：E-4 显示（框架缺失）、LE Audio、AWDL（封死）、6GHz/WPA3/802.1X。
 
