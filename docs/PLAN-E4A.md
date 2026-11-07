@@ -63,3 +63,16 @@ ACTIVE 必须**只含 0x100**，否则仍显示 ac（M5 报告 §2.1 实证）�
 ## 8. 纪律
 - 改动域：[K] kext（插件本身）+ 安装脚本；不碰系统二进制
 - 实验 1 重启一测；失败即回滚
+
+## 9. 万一进不了系统的救援预案（重启前就绪）
+- 风险说明：Lilu KernelPatcher::routeFunction 失败自带容错（仅记录并回退，不会 panic）；
+  插件 start() 无破坏性操作，panic 概率很低。但预置预案：
+- **救援物已就位** `EFI/phyfix-restore/`：restore.sh（删 kext+还原 config 前的备份副本）+
+  config.plist.before-20261107-201708 + README.txt。
+- **三档恢复**：
+  1) 系统照常进入（最可能）→ 无需动作；功能异常则删 config 条目+kext 后重启。
+  2) 卡在加载/反复重启（panic 类）→ **重启前务必插上 1401 救援 U 盘**（其 EFI 不含
+     MtkPhyFix，纯净可启动）→ 从 U 盘启动进系统 → 运行
+     `bash /Volumes/EFI0/phyfix-restore/restore.sh` → 回主盘重启。
+  3) 连 U 盘也没 → OpenCore 启动选择器选 Recovery → 终端挂载 EFI → 同 2 的脚本。
+- Debug 位：现有 boot-args 含 `-v debug=0x100 keepsyms=1`（panic 时可见、留日志）。
