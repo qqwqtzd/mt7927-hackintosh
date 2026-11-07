@@ -127,3 +127,48 @@
 
 ---
 *最后更新：2026-11-07。正文为方案分析；落地情况见顶部备注（RSSI 选强漫游已实现，系统层 11k/v/r 未做）。*
+---
+
+## 五、实测环境确认（2026-11-07，路由器直读 + 驱动扫描）
+
+> 结论前置：**漫游必要且已生效**。家里是 **4 台 TP-Link 受管 AP 同 SSID 多节点部署**，
+> `MtkW5Roam=2` 的 2 次切换为真实漫游（非误判）。
+
+### 1. AP 部署（H3C 实为 TP-Link TL-ER2260T 企业路由，AC 管理）
+
+| # | 型号 | 5GHz | 2.4GHz | 在线 |
+|---|---|---|---|---|
+| 1 | TL-AP1200GC-PoE/DC（AC1200）| ch36 | ch1 | 6h32m |
+| 2 | TL-AP1200GC-PoE/DC（AC1200）| ch36 | ch1 | 6h32m |
+| 3 | TL-AP1200GC-PoE/DC（AC1200）| ch36 | ch1 | 4h32m |
+| 4 | TL-XAP3006GC-PoE/DC 易展（AX3000 Wi-Fi 6）| ch36 | ch1 | 23m |
+
+- 全部 5G 同 ch36、2.4G 同 ch1（AC 未开自动信道错开，同频部署）
+- 驱动扫描缓存印证：`Maintain` ch36 出现 3 个不同 BSSID（-60/-76/-81）+ `Maintain-IoT` ch1 3 个 BSSID
+
+### 2. AC 侧漫游配置（apmng_roam.global，直读）
+
+| 项 | 值 | 含义 |
+|---|---|---|
+| 11k_switch / 11v_switch / 11r_switch | on/on/on | **802.11k/v/r 全开** |
+| roaming_dif | 8 dB | 新 AP 需比当前强 8dB |
+| 5g/2g_rssi_trigger_threshold | -80 / -75 dBm | RSSI 触发阈值 |
+| 5g/2g_low_rssi_kick | off / off | 弱信号**不硬踢** |
+| 5g/2g_low_rate_kick | off / off | 低速**不硬踢** |
+
+### 3. 关键结论：漫游仅靠驱动自研路径
+
+- 本驱动**未实现 802.11v BTM / 802.11r FT 处理** → AC 的 11v/11r 对本机空转
+- AC 弱信号剔除全关 → 不会 deauth 赶人
+- **因此 RSSI 漫游（MtkW5Roam）是这台机器唯一生效的漫游路径**，必须保持开启
+
+### 4. 参数对齐建议（下次装机生效）
+
+| 参数 | 现值 | 建议 | 理由 |
+|---|---|---|---|
+| MtkRoamDelta | 12 dB | **8 dB** | 对齐 AC `roaming_dif=8`；12dB 门槛偏高，4 AP 同频错开不明显时可能"该切不切" |
+| （可选项）绝对阈值 | 无 | 5G<-80 / 2.4G<-75 才评估（同 AC 阈值）| 减少固定位置双 AP 间无效评估（配合 20s cooldown）|
+
+- 备选说明：不改代码即可用 `mtkroam=1` 与 plist 键调参；改绝对阈值需在 MtkJoin.cpp 加一个属性。
+- **可选增强（信号接近时优先 AX AP）**：ch36 同时有 AC1200（867Mbps）与 AX3000（2402Mbps），
+  当前候选只看 RSSI；RSSI 差 < delta 时优先 HE 能力 AP 可白赚速率。列为待评估。
