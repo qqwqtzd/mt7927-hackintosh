@@ -105,7 +105,7 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
 
 | # | 需求 | 原判定 | 本机/M5 逆向新证据 | 重估 |
 |---|---|---|---|---|
-| 1 | **E-4 PHY Mode 显示 ax** | 不可达（NoneProtocol 服务缺失）| 本机 IO80211Family 具备 `IO80211NoneProtocol` 元类（gMetaClass 在 getPHY_MODE 包装引用）；可**实现 NoneProtocol 子类 attach 到 skywalk 接口**提供 getPHY_MODE | **可行**（中成本，需 NoneProtocol vtable 布局，kcabi dump 覆盖）|
+| 1 | **E-4 PHY Mode 显示 ax** | 不可达 | 本机内核 dispatch 证实 ioctl 0x0E 唯一路径 = `apple80211getPHY_MODE` → NoneProtocol 服务 → slot 61（**1194 槽几乎全 pure_virtual，子类需数百实现**）；M5 报告确认显示规则（PHYMODE_ACTIVE 单位 0x100）| **架构不可行**（子类成本过巨）；接受 ac 标签（功能不受影响，Channel 160 已修复）→ 详见 `docs/M5-PHYMODE-REPORT.md` |
 | 2 | **WCM 共存闭环** | 服务缺失 | **M5 有 `WirelessCoexManager.framework` 实体**（含主二进制）；本机仅空壳（缺主二进制）→ 架构（arm64→x86_64）不可移植 | ⚠️ **条件可行**：需同 build 的 x86_64 主二进制来源（黑苹果镜像/同版本完整系统）|
 | 3 | **AWDL/AirDrop** | 能力 gate 封死 | 无新推翻；补充**观测实验**（override 虚拟接口槽 419/445/446 打日志，系统若曾尝试创建 awdl 接口即可见）| 判定维持；观测可一锤定音 |
 | 4 | 漫游档案触发 | 已接线待触发 | — | 维持 |
