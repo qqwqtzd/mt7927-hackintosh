@@ -164,3 +164,29 @@ macOS 的 AWDL 由 **IO80211Family 系统栈垄断**，AirDrop 走系统 UI/分�
 - 实验/验证阶段：1 次重启，风险可控（新代码不影响现有 STA）
 - 完整 AWDL（若实验为真）：70 ioctl 薄转发 + controller 槽 + 芯片能力（多接口/切信道/BA/STA）+ wifi 侧多接口分时 → **数周级**，但系统栈承担协议全部心智，路线确定
 - 仍保留的不可知因素：IO80211Family 是否在 runtime 校验驱动"原生性"（若强制校验则第三方无解——实验可揭晓）
+
+---
+
+## 九、关键更正与最终判定（2026-11-07，实验 2 轮后）
+
+> **"被拒 AWDL 家族"实为 16 个通用命令，系统从未请求任何 AWDL 专用 ioctl。**
+
+### 16 个被拒命令全映射（0xcc8 探针法，逐一反编译确认）
+
+| 码 | 命令 | 码 | 命令 |
+|---|---|---|---|
+| 0x15a | getBEACON_INFO | 0x161 | **getNSS** |
+| 0x0cf | getCHANNELS_INFO | 0x1ae | setWCL_ROAM_PROFILE_CONFIG |
+| 0x0ff | getBTCOEX_PROFILE | 0x0bf | setOFFLOAD_ARP |
+| 0x01c | getLOCALE | 0x216 | getPLATFORM_CONFIG |
+| 0x055 | setIE | 0x1a8 | getWCL_FW_HOT_CHANNELS |
+| 0x174 | getBSS_BLACKLIST | 0x0d8 | setROAM_PROFILE |
+| 0x187 | getSLOW_WIFI_FEATURE_ENABLED | 0x233 | getCONNECTION_ID |
+| 0x176 | getTXRX_CHAIN_INFO | 0x0c0 | setOFFLOAD_NDP |
+
+### 判定
+1. **系统 0 次发起 AWDL 专属命令**（70 个 get/setAWDL 一个都没用过）→ 有更前置的能力 gate
+2. 能力 gate 在 IO80211Family 初始化路径（PeerManager/NANPeer 创建均未见 AWDL 分叉；AWDLPeerManager 实例化条件未在 Skywalk/Controller 类直接可见——推测基于 controller 是否注册 AWDL protocol 服务/能力位，第三方驱动无注册路径）
+3. 因此 **"接住 ioctl"路线对 AWDL 无效**；AWDL 对第三方驱动维持"需突破能力 gate"判定，**够本收束**
+### 附带战利品（真实可做）
+这 16 个命令的放行+实现可改善现网体验：NSS（空间流/速率显示）、CHANNELS_INFO（信道信息）、ROAM_PROFILE（漫游配置通道）、OFFLOAD_ARP/NDP（省电 offload）、BTCOEX（共存）等——低风险、1 次重启可验证。
