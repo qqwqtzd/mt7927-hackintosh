@@ -146,3 +146,20 @@ Apple 私域广播载荷的"剪贴板能力"位由系统组装；对端看到 0�
 ## 8. 守则重申
 - 本文档只分析。任何 P 路径的启动需你逐条批准；[S] 域路径默认不做。
 - 实验仍按"1 重启一测"；变更全在 kext/App/数据层。
+
+## 9. 闸门定位进展（2026-11-07 深夜，真二进制逐位实锤，0 重启）
+### 剪贴板/广播位闸门已定位到函数级（sharingd 25G332 真二进制）
+- 组装点① 0x10007861e：`mov rax,[GOT_SFActivityAdvertiserOptionFlagCopyPasteKey]; mov rdx,(rax)`
+  以该 key 为参调 msgSend（options 字典插入）→ 返回 BOOL → `shl $3` → 写入选项字节位。
+- 组装点② 0x1001842bc：同构（setValue:forKey: 模式，键=同一全局）。键全局由
+  Sharing.framework 导出（`S _SFActivityAdvertiserOptionFlagCopyPasteKey` @0x7ff842552c00）。
+- 谓词排除（真件反汇编）：
+  - `_SFDeviceSupportsContinuity` = mov $1; ret（**恒真哑函数**）→ 非闸门。
+  - BT 控制器 HCI 能力字节理论 → **与本品位无关**（位出自谓词调用，非 HCI 报告）→ P2a 降级。
+- 当下最可能闸门：ObjC 谓词绑定 **IDS/身份连续性状态**（sharingd 内 IDSContinuity×36 证据）
+  → 支持 P1（身份项预置）为主路径；谓词精确识别留 W3 工作簿（selref 需运行时解析）。
+### 方案优先级更新
+1. W3：解析该谓词（运行时/加载态解析 selref 或 IDS 侧反推）→ 0 重启
+2. P1（身份预置）仍为可执行首选（需先 M5 只读导出钥匙串项 schema）
+3. P2a（HCI 位）降为低优先（本品位不读 HCI）
+4. E-4/W1（聚合器二次核查 + 扫描支路）仍挂队列（Ghidra 已就绪）
