@@ -176,3 +176,17 @@ Apple 私域广播载荷的"剪贴板能力"位由系统组装；对端看到 0�
   P2a 移出**；若 P1 预置后该位仍 0（谓词深层校验），则结构性维持（学界边界）。
 - 复核实验（可用，1 重启）：P1 预置后跑 phyprobe 同级探针（读本机广告位）或直接
   useractivityd 日志看 flagCopyPasteKey 翻转。
+
+## 10. 剪贴板/广播位终极闸门：AKS SE 签名（2026-11-07，符号级闭合）→ P1 作废
+- **前提纠错**：旧"身份密钥从不生成"系查询字段错误（`-s` 匹配旧误导名；真项在 **acct**，
+  svce=com.apple.continuity.encryption）。本机 login 钥匙串**实证存在且可读**（rc=0）：
+  handoff-own-encryption-key / handoff-decryption-key-{两个对端IDS} / AirPlay Identity。
+  M5 结构同构（own+自己+对端 F06E0DC7 等）。system 钥匙串两机均无 → 位置一致。
+- **P1（身份项预置）作废**：项已在且可用，预置无意义（省 1 次重启）。
+- **闸门锁死（真件符号级）**：sharingd 依赖表含 AppleKeyStore.framework；
+  未定义符号 `AKSRefBSignParam`（remoteSessionSigningCertificate/Type/set_data/serialize）
+  → CopyPaste 位谓词＝AKS 远程会话签名（SE）能力检测 → 无 SE 必失败 → 位恒 0 →
+  系统从不发起上传。与 pboard 的 AKS 失败（-536870174）同根。
+- 终判：**结构性（Secure Enclave 硬件依赖）成立**，证据链=真二进制依赖+符号+双机行为对照；
+  上传链、广告位、AKS 三线索归一。剪贴板边界关闭（不消耗重启）。
+- 遗留功效性替代：iPhone→Mac 单向可用（不变）。
