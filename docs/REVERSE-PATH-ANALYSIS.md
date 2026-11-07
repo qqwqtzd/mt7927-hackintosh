@@ -209,3 +209,24 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
   BTUCM 配置读取点。MacCoex 通告独立工作（kCBAdvDataIsCoexDenied=0 实证）不受影响。
 - 方法资产：python Mach-O fat/节解析 + RIP-rel xref 扫描 + lldb 反汇编 + dyld_info 绑定解码 =
   首个完整"实体→xref→反汇编→绑定→跨平台对照"闭环，后续逆向复用。
+
+## 十六、E-4 PHY 显示：实验 A 负结果 + kernelcollection 逆向进行中（2026-11-07 夜）
+
+- **实测管线落地**（零重启）：
+  - `~/rea-tools/phyprobe`：dlopen 私有 IO80211.framework 调 `Apple80211CopyValue(0x0E)`，
+    26.7.2 实机返回 `PHYMODE_ACTIVE=0x80 (ac)`、`PHYMODE_SUPPORTED=0x9F (a/b/g/n/ac, 无 ax)`——
+    System Profiler "PHY Mode: 802.11ac" 的直接数据源。
+  - 我们 kext 分发表无 0x0E → 字典由 IO80211Family 聚合（用户态只建字典，键名 PHYMODE_* 在
+    IO80211.framework 用户侧；内核空间无该字面串 —— 全 kc 字符串扫描实证）。
+- **实验 A（1 次重启，失败）**：getCARD_CAPABILITIES 的 PHY 字对 0x0e/0x0f 加 ax 位(0x100)，
+  装机重启后探针仍 0x9F/0x80 → **family 不读该字**；另一字对 0x06/0x07 (0xa5bd 已含 ax 位)
+  也无效 → 聚合输入另有其源。结论：不再盲试。
+- **kernelcollection 逆向（进行中）**：
+  - 活体 `BootKernelExtensions.kc`（25G332，64MB，kc2 格式）含 IO80211Family（REGION347，
+    明文 x86_64 Mach-O，文件偏移即 kc 全局偏移）；`kc-slice.py` 提取器 + plist 缓存已归档。
+  - IO80211Family 内 ioctl 名字表确认（SSID→LOCALE 全序，PHY_MODE=0x0E）。
+  - AppleBCMWLANCoreMac（真机驱动，2.2MB）同集合可对照。
+  - Ghidra 11.3.2 后台全量分析 kc 中；完成后定位 0x0E 聚合器 → 确定真正输入（候选：
+    HE_CAPABILITY 应答 / 接口 PHY getter），再做最终驱动侧修复（预计还需 1 次重启）。
+- 结论暂记：E-4 前判"结构性不可修"依据（NoneProtocol 纯虚）与显示链（ioctl 0x0E 字典）
+  为**两条不同路径**；显示路径存在驱动侧杠杆（待 Ghidra 定论），维持"可修候选"状态。
