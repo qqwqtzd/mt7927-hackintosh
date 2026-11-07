@@ -1,0 +1,7 @@
+IO80211Family 25G332 牌面 token 图（2026-11-07 收割）
+扫描: WCLScanManager(74) WCLBGScanManager(29) ScanManager(29) WCLBGScanCore(25)
+      ScanSanitizer(20) ScanCacheStore(14) WCLScanRequest(10) RoamScan(9)
+漫游: WCLRoamManager(15) WCLAdaptiveRoam(8) WCLRoamProfile(7) WiFiRoam(16) RoamProfile(5)
+AWDL: 341 处（AWDLPeerManager 等）
+BSS : BssSteering(198) BssManager(30) PEER_CHANNEL_STEER(27)
+靶标: ScanCacheStore/ScanSanitizer (扫描记录→PHY) · WCLAdaptiveRoam (roam advise 触发链)
