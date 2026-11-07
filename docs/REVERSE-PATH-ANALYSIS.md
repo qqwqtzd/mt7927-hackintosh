@@ -151,3 +151,11 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
 - **第三方兜底（可用替代）**：LocalSend（localsend.org，macOS+iOS 免费/开源/局域网直连，
   双向文字/图片剪贴板+文件）；备选 CrossPaste、柠檬 Push。均为局域网 TCP，不依赖
   Apple Continuity 链路，与本机 AWDL/AKS 缺位无关。
+
+### 原生路径已全部走尽（2026-11-07 终判）
+- 已试（均无效）：接力开关重开、`ClipboardSharingEnabled=1`+重启 useractivityd、applekeystored
+  kickstart、关闭 FileVault、退出/重登 iCloud（`handoff-own-encryption-key` 始终不生成）。
+- 终判：系统初始化 Handoff 剪贴板身份依赖硬件安全条件 → 黑苹果不生成身份密钥 →
+  sharingd 广播不自宣剪贴板能力（flagCopyPasteKey=0）→ 上传永不触发。
+- **不装第三方前提下 Mac→iPhone 剪贴板不可修**；iPhone/M5→Mac 正常。
+- 原生替代：备忘录 / iCloud 云盘 / 共享相簿（零第三方）。
