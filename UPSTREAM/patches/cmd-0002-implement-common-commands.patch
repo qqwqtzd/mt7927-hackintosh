@@ -1,5 +1,5 @@
 From 7a0fb1c35edb77f1fe8ae4094c7673036613a8c6 Mon Sep 17 00:00:00 2001
-From: links <dev@mt7927.dev>
+From: MT7927 Studio <dev@mt7927.dev>
 Date: Sat, 7 Nov 2026 13:02:24 +0800
 Subject: [PATCH 2/2] native: implement common apple80211 commands + unblock
  MAX_NSS_FOR_AP

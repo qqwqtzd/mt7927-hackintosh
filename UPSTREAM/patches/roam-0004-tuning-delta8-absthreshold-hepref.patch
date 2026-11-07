@@ -1,5 +1,5 @@
 From 22c0dc93860f3f5901ef3f923b794864bd2a6081 Mon Sep 17 00:00:00 2001
-From: links <dev@mt7927.dev>
+From: MT7927 Studio <dev@mt7927.dev>
 Date: Sat, 7 Nov 2026 10:41:19 +0800
 Subject: [PATCH 4/4] mt7927: roam tuning - delta 8 dB, absolute RSSI
  threshold, HE preferred

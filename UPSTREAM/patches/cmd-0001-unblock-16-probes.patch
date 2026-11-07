@@ -1,5 +1,5 @@
 From 9824e97d9bba16916ee7bf7ca101a3adfcf4ff16 Mon Sep 17 00:00:00 2001
-From: links <dev@mt7927.dev>
+From: MT7927 Studio <dev@mt7927.dev>
 Date: Sat, 7 Nov 2026 12:51:14 +0800
 Subject: [PATCH 1/2] native: unblock 16 commonly-asked command probes (t2)
 

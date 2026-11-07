@@ -1,5 +1,5 @@
 From a20f30d1f0b359a19ee9f9de1d959442d63ff844 Mon Sep 17 00:00:00 2001
-From: links <dev@mt7927.dev>
+From: MT7927 Studio <dev@mt7927.dev>
 Date: Sat, 7 Nov 2026 10:16:24 +0800
 Subject: [PATCH 2/4] mt7927: fix roam picking (drop wantBssid lock), enable
  roaming by default
