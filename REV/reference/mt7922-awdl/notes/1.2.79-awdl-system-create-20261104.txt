@@ -1,0 +1,107 @@
+1.2.79 AirDrop: family-created awdl0 and role-6 link bring-up, 2026-11-04
+
+Scope: close the first missing link of the AirDrop chain. Until now awdl0 could
+only be created by the privileged diagnostic (probe 17); airportd's own
+VIRTUAL_IF_CREATE was refused, so a normal AirDrop attempt had no AWDL
+interface at all (1.2.39 live state: "ifconfig awdl0 -> does not exist",
+airportd "Failed to match cached interface (role=awdl parent=(null))").
+No hardware run in this change; AirDrop remains unclaimed until an iPhone
+shows the prompt and receives a file.
+
+Evidence used
+1. IO80211Family static setVIRTUAL_IF_CREATE (0xffffff80022886a8) validates a
+   32-byte request (cmpl $0x20,0x18(req)), requires non-null data and forwards
+   the same pointer to the driver slot (0x1160 Darwin25 / 0x1110 Darwin24).
+   apple80211_virt_if_create_data is exactly 32 bytes:
+     +0 version, +4 mac[6], +10 unk1, +12 role, +16 bsd_name[16].
+   (AWDL/evidence-darwin26.txt, zOWCore/vendor/apple80211_ioctl.h)
+2. Role numbering for __IO80211_TARGET >= 13: P2P_DEVICE=3, P2P_CLIENT=4,
+   P2P_GO=5, AWDL=6, SOFT_AP=7 (apple80211_var.h). Role 6 is the only role the
+   AWDL factory may answer.
+3. BCM AppleBCMWLANCore::enableVirtualInterface has a dedicated role-6 branch
+   that calls AppleBCMWLANProximityInterface::bringupLink (0x1660a1e). The
+   family's IO80211AWDLPeerManager::enableAWDL then requires the vif link to be
+   Up; b215/b216 recorded "enableAWDL: ERROR: Interface LinkDown. Cannot enable
+   AWDL" for exactly this missing step.
+4. BCM createProxInterface writes the interface MAC into RegistrationInfo
+   +0x108 (0xffffff800165ddcc..0x165de94), i.e. the family supplies the AWDL
+   address; it is not a driver-random value.
+
+1.2.79 change
+- Native/WCLProtocolOverrides.inc (Darwin24 + Darwin25 slots)
+  * setVIRTUAL_IF_CREATE now passes 32 as the request length instead of 0, so
+    wclHardwareRequest can bound the payload without guessing.
+- Native/WCLCoreRuntime.hpp, APPLE80211_IOC_VIRTUAL_IF_CREATE
+  * Decodes the 32-byte apple80211_virt_if_create_data (version, mac, role,
+    bsd_name) and publishes version/role/name/address as properties.
+  * version != 1 -> BadArgument; role != 6 -> Unsupported. No non-AWDL role is
+    ever mapped onto the AWDL factory (the previous blanket refusal is now a
+    role check, not a selector check).
+  * role 6 -> buildProximity(requested MAC); idempotent when the interface is
+    already published.
+  * Writes the real BSD name (+16) and hardware address (+4) back into the
+    caller's buffer. The family and airportd match awdl0 by this pair; a
+    fabricated name would reproduce role=awdl parent=(null).
+  * New counters: MT7922AWDLCreateAccepted/RoleRejected/Failures/
+    AddressWritten/NameWritten/Version/Role/Name/Address.
+- Native/ModernCore.cpp/.hpp
+  * buildProximity/buildProximityGated/buildProximityOwned take an optional
+    requested MAC; proximityAction forwards it through runAction.
+  * A valid unicast request address is used verbatim (local bit forced only if
+    it equals the infrastructure MAC). Random remains for probe operations.
+    AWD4LocalAddressSource=wcl-create-request, AWD6CreateRequestAddressUsed.
+  * New enableVirtualInterface/disableVirtualInterface overrides. For the AWDL
+    vif they bring the link Up/Down (BCM bringupLink equivalent) and return
+    success; every other vif goes to the IO80211Controller base.
+    AWD6EnableVirtualInterface / AWD6DisableVirtualInterface record the call.
+
+Why the link-up belongs here
+setLinkState(Up) only publishes the interface: it sets BSD IFF_UP|IFF_RUNNING,
+configures the P2P ifnet and reports the native media status. It does not start
+a window; the radio schedule is still gated by setAWDL_SYNC_ENABLED/SYNC_STATE.
+Without it the family refuses to enable AWDL at all, which is the state every
+previous AirDrop attempt ended in.
+
+Verification (host)
+- Debug and Release x86_64 BUILD SUCCEEDED (scheme MT7922AngusSW).
+- Release binary contains the new log/property strings:
+  "MT7922 AWDL WCL create: role=6 accepted name=%s mac=%s requested-name=%s",
+  "role6-created-by-family-request", "AWD6EnableVirtualInterface",
+  "wcl-create-request".
+- awdl::Control host test PASS (role/version/MAC admission unchanged).
+- No undefined kernel symbol was added: the change uses existing virtual slots
+  (enableVirtualInterface/disableVirtualInterface were already in the vtable).
+
+Package
+  Build/MT7922SkyWalk-1.2.79-awdl-system-create/
+  MT7922SkyWalk.kext, MT7922SkyWalk-1.2.79-kext.zip, README.zh-CN.md
+  CFBundleVersion 1.2.79; MT7922TestProfile 1.2.79-awdl-system-create
+
+Hardware test (final build)
+  Install 1.2.79, reboot (no hot-load of the same bundle ID).
+  Do NOT run ./proximity 17. Open Finder > AirDrop and watch for the system to
+  create awdl0 by itself.
+  ifconfig awdl0
+  ioreg -l -w0 -n MT7922AWDLInterface | grep -E 'MT7922AWDLCreate|AWD6EnableVirtualInterface|AWD6LinkState|AWD6BSDLinkFlags|AWD6NativeAwdl|AWD6EngineStarted'
+  sudo dmesg | grep -E 'AWDL WCL create|enableAWDL|awdl0' | tail -40
+
+Reading
+- MT7922AWDLCreateRequests grows and MT7922AWDLCreateAccepted=1 with
+  MT7922AWDLCreateNameWritten=true: airportd created awdl0 through the driver.
+- MT7922AWDLCreateRole is 6: the role field is confirmed on this family build.
+  A different value with RoleRejected growing means the offset or the enum is
+  wrong for this macOS build - capture the property before changing anything.
+- MT7922AWDLCreateRole=6 but build failed 0x...: the create reached the AWDL
+  factory and the failure is inside buildProximity (AWD5RegisterStage,
+  AWD1FactoryRefused, AWD6ChildCount tell which step).
+- AWD6EnableVirtualInterface=true and AWD6LinkStateLast=2: the link was brought
+  up by the family's enable path. No more "Interface LinkDown. Cannot enable
+  AWDL".
+- Still no awdl0 and CreateRequests=0: the request never reached the driver;
+  the caller path is above WCL and must be traced in IO80211Family, not here.
+
+Next candidates (not implemented here)
+- 73-byte peer-format sync TLV (+0x0a/+0x20 AW length fields).
+- Action-frame ring instead of the single last-frame cache in ModernCore.
+- A-MSDU/Block Ack for transfer throughput.
+AirDrop remains unclaimed until the iPhone prompt appears and a file arrives.

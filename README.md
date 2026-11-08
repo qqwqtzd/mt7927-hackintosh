@@ -12,7 +12,7 @@
 >
 > **系统侧边界已实证闭合**（详见 [`docs/REVERSE-PATH-ANALYSIS.md`](docs/REVERSE-PATH-ANALYSIS.md)）：
 > - 通用剪贴板 Mac→iPhone：**结构性不可解**（依赖 Secure Enclave 硬件签名，对端验签）
-> - AirDrop / 随航 / Universal Control：**结构性不可解**（Apple 私有 AWDL 无线组网协议）
+> - AirDrop / 随航 / Universal Control：**可修但工程量大**（已获第三方 MT7922 参考实现证明：复用 IO80211Family 内置 AWDL 引擎，见 `REV/reference/mt7922-awdl/`；端到端仍未验证）
 > - WCM 服务注册：**全平台设计行为**（真机同样不注册，非缺陷）
 > - PHY 标签 802.11ac→ax（当前链路行）：**内核补丁路径实测会致系统挂起**（4 种实现
 >   全部验证），扫描记录行已正确显示 ax
@@ -216,7 +216,7 @@ ioreg -rc MtkBt -l -w0 | grep -E 'MtkBt(PreReset|State|WarmPath|Tries)'
 |---|---|---|
 | 剪贴板 Mac→iPhone | **结构性**：sharingd 的 CopyPaste 位由 AppleKeyStore **SE 会话签名**门控（符号级 `AKSRefBSignParam`）；无 SE 必然位 0、系统从不发起上传，真机行为一致 | 真二进制依赖+符号 |
 | 蓝牙私域广播能力位 | 同源：广告位=SE 签名能力宣告；HCI 位/SFDeviceSupportsContinuity 均排除 | 反汇编 |
-| AWDL / AirDrop / 随航 | 结构性（无 AWDL 无线子系统）；P2P 桥方案可行性极低（<20%，月级） | 档案闭合 |
+| AWDL / AirDrop / 随航 | **可修**（第三方 MT7922 参考实现已证明：复用 Family 内置 AWDL 引擎）；工程量大、数据面为难点、端到端未验证 | 参考实现在 `REV/reference/mt7922-awdl/` |
 | WCM 服务注册 | **设计行为**：bluetoothd 弱引用 _WCMEnabled（真二进制导出存在），但启动闭包双机（本机+M5）均不加载 → 全平台不注册；MacCoex 正常工作 | vmmap 双机+真件 |
 | E-4 扫描记录行 | ✅ **已 ship**：网络行显示 `b/g/n/ac/ax`（d23f0dd HE map 修补） | 实机 Profiler 行 |
 | E-4 当前链路行 | 结构性：0x0E 接口内部聚合（三轮实验否定驱动表面） | 探针+kc 全量 |

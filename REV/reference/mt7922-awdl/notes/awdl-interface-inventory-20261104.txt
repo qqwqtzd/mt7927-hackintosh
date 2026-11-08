@@ -1,0 +1,113 @@
+AWDL interface inventory, 2026-11-04 (code state 1.2.85)
+
+Question: are the AWDL interfaces actually implemented? Answer: yes, with 13
+documented fail-closed exceptions. This file is generated from the source, not
+from memory: SPI/Darwin25/AWDLProtocolMethods.inc is the 63-slot vtable order,
+and every MT7922_AWDL_TEMPLATE entry was matched to its definition in
+Native/ModernCore.cpp. No code change in this pass.
+
+Totals
+  IO80211AWDLProtocol slots : 63
+    implemented             : 50  (definition present, body reviewed)
+    fail-closed stub        : 13  (awdlProtocolMethod -> ENOTSUP)
+    declared, no definition : 0
+  MT7922AWDLInterface methods declared in the class : 22
+    inline                  : 8
+    defined in ModernCore.cpp: 14
+    missing                 : 0
+  Core AWDL helpers (nativeAwdl*/dispatch*/proximity*/service*): 27, all
+  defined across EngineRuntime25.hpp / TemplateRuntime25.hpp /
+  DataPathRuntime25.hpp / DiscoveryRuntime25.hpp.
+
+50 implemented slots (offset, name, definition, backing state)
+  0x0fc8 getSSID                              ModernCore.cpp:2063  version+empty SSID
+  0x0fd0 getCHANNEL                           ModernCore.cpp:2429  live grant + window channel
+  0x0fd8 getBSSID                             ModernCore.cpp:2044  registered address
+  0x0fe0 getSTATE                             ModernCore.cpp:2035  linkUp
+  0x0fe8 getAWDL_SYNC_PARAMS                  ModernCore.cpp:2054  the one accepted timing set
+  0x0ff0 getAWDL_SYNC_ENABLED                 ModernCore.cpp:2073  engine started
+  0x1000 getAWDL_ELECTION_ID                  ModernCore.cpp:2081  staged
+  0x1008 getAWDL_ELECTION_METRIC              ModernCore.cpp:2087  staged
+  0x1010 getAWDL_SYNCHRONIZATION_CHANNEL_SEQUENCE ModernCore.cpp:2093 last accepted 0x190
+  0x1018 getPEER_CACHE_MAXIMUM_SIZE           ModernCore.cpp:1839  live peer cache limit
+  0x1020 getAWDL_MASTER_CHANNEL               ModernCore.cpp:2103  staged
+  0x1028 getAWDL_SYNC_STATE                   ModernCore.cpp:2416  staged mode, 24-byte shape
+  0x1030 getAWDL_ELECTION_RSSI_THRESHOLDS     ModernCore.cpp:2109  staged
+  0x1038 getAWDL_PRESENCE_MODE                ModernCore.cpp:2120  staged
+  0x1050 getAWDL_SECONDARY_MASTER_CHANNEL     ModernCore.cpp:2126  staged
+  0x1058 getAWDL_AF_TX_MODE                   ModernCore.cpp:2132  staged (u32)
+  0x1060 getAWDL_MIN_RATE                     ModernCore.cpp:2140  staged
+  0x1068 getAWDL_ENCRYPTION_TYPE              ModernCore.cpp:2408  staged (always none)
+  0x1070 getAWDL_TXCAL_PERIOD                 ModernCore.cpp:2322  staged
+  0x1090 getAWDL_AF_SECONDARY_PAYLOAD_CAPABILITIES ModernCore.cpp:2148 cap 0
+  0x10b0 setAWDL_SYNC_PARAMS                  ModernCore.cpp:1687  staged (16/16/16/110 only)
+  0x10b8 setAWDL_SYNC_ENABLED                 ModernCore.cpp:1792  starts/stops the engine
+  0x10c0 setAWDL_EXTENSION_STATE_MACHINE_PARAMETERS ModernCore.cpp:2160 4 staged bytes
+  0x10c8 setAWDL_ELECTION_ID                  ModernCore.cpp:1626  staged
+  0x10d0 setAWDL_BSSID                        ModernCore.cpp:1610  staged
+  0x10d8 setAWDL_ELECTION_METRIC              ModernCore.cpp:2181  staged
+  0x10e0 setAWDL_SYNCHRONIZATION_CHANNEL_SEQUENCE ModernCore.cpp:1987 engine sequence
+  0x10e8 setAWDL_MASTER_CHANNEL               ModernCore.cpp:1704  staged
+  0x10f0 setAWDL_SYNC_STATE                   ModernCore.cpp:1746  engine start/stop + mode
+  0x10f8 setAWDL_ELECTION_RSSI_THRESHOLDS     ModernCore.cpp:1724  staged
+  0x1100 setAWDL_PRESENCE_MODE                ModernCore.cpp:2194  staged
+  0x1108 setPEER_CACHE_CONTROL                ModernCore.cpp:1859  live peer cache
+  0x1110 setAWDL_OOB_REQUEST                  ModernCore.cpp:1666  real TX in a granted window
+  0x1118 setAWDL_SYNC_FRAME_TEMPLATE          ModernCore.cpp:1600  captures the family template
+  0x1120 setAWDL_ELECTION_PARAMS              ModernCore.cpp:1933  parsed + published
+  0x1128 setAWDL_PEER_TRAFFIC_REGISTRATION    ModernCore.cpp:1586  forwarded to the family
+  0x1130 setAWDL_SECONDARY_MASTER_CHANNEL     ModernCore.cpp:2209  staged
+  0x1138 setAWDL_AF_TX_MODE                   ModernCore.cpp:2223  staged
+  0x1140 setAWDL_MIN_RATE                     ModernCore.cpp:2240  staged + cell 213
+  0x1150 setAWDL_ENCRYPTION_TYPE              ModernCore.cpp:2393  accepts none only
+  0x1158 setAWDL_OOB_AUTO_REQUEST             ModernCore.cpp:1675  real TX in a window
+  0x1160 setAWDL_TXCAL_PERIOD                 ModernCore.cpp:2308  staged
+  0x1168 setAWDL_AWDL_ADVERTISERS             ModernCore.cpp:1963  parsed + published
+  0x1170 setAWDL_DFSP_CONFIG                  ModernCore.cpp:2351  parsed + published
+  0x1178 setAWDL_DFSP_UCSA_CONFIG             ModernCore.cpp:2364  parsed + published
+  0x1198 setTX_RATE                           ModernCore.cpp:2448  staged
+  0x11a0 setP2P_COEX_PROTECTION               ModernCore.cpp:2262  acknowledged (no P2P vif)
+  0x11a8 setPSF_DWELL                         ModernCore.cpp:2330  parsed + published
+  0x11b0 setAWDL_CONFIG                       ModernCore.cpp:2291  staged (0x73 default, |3)
+  0x11b8 setAWDL_RTG_PEER_STATS_CONFIG        ModernCore.cpp:2382  staged
+
+13 fail-closed stubs (awdlProtocolMethod -> ENOTSUP, never a fabricated 0)
+  0x0ff8 getAWDL_EXTENSION_STATE_MACHINE_PARAMETERS  async firmware GET in BCM
+  0x1040 getAWDL_ELECTION_PARAMS                     async firmware GET
+  0x1048 getAWDL_DEVICE_CAPABILITIES                 sync, chip-table semantics unrecovered
+  0x1078 getAWDL_DEV_STATS                           async GET, hands a pointer back
+  0x1080 getAWDL_DFSP_CONFIG                         async GET
+  0x1088 getAWDL_CCA                                 async GET (length gate u16@+4==0x10)
+  0x1098 getLLW_PARAMS                               BCM has no such method (inherited)
+  0x10a0 setSSID                                     not an AWDL operation (inherited in BCM)
+  0x10a8 setCHANNEL                                  not an AWDL operation (inherited in BCM)
+  0x1148 setAWDL_ENCRYPTION_KEYS                     AWDL is open here; type!=0 already refused
+  0x1180 setCOMPANION_SKYWALK_IF_CREATE              no companion interface
+  0x1188 setAWDL_OOB_SEC_PAYLOAD_REQUEST             capability reported as 0
+  0x1190 setLLW_PARAMS                               no low-latency wake support
+
+Interface object (MT7922AWDLInterface / awdl0)
+  createVirtualInterface      ModernCore.cpp:769   role 6 only, rejects multicast/zero
+  enableVirtualInterface      ModernCore.cpp:810   link Up (BCM bringupLink equivalent)
+  disableVirtualInterface     ModernCore.cpp:826   link Down
+  buildProximityOwned         ModernCore.cpp:1229  attach/start/register/publish
+  closeProximityOwned         ModernCore.cpp:1436  quiesce/close/stop/detach
+  initialize                  ModernCore.cpp:2511  role 6, "AWDL" role string, self MAC
+  getBSDName                  ModernCore.cpp:2519
+  getSupportedMediaArray      ModernCore.cpp:2529
+  prepareBSDInterface         ModernCore.cpp:2553
+  enableDatapath              ModernCore.cpp:2589
+  setLinkState                ModernCore.cpp:1509  BSD UP/RUNNING, P2P ifnet, media status
+
+Honest note on strength
+  The weakest implementations are the record-only setters: DFSP, DFSP_UCSA,
+  PSF_DWELL, P2P_COEX, ELECTION_PARAMS, AWDL_ADVERTISERS. They parse the
+  family's structure and publish it with Applied=false; no radio effect and no
+  getter reads them back. That is deliberate (the driver has no firmware ABI
+  for those BCM iovars) but it is observability, not control.
+
+Verification
+  Counts above are generated by matching the include file against the
+  definitions; the build also proves there is no declared-but-undefined
+  virtual (the vtable would not link). xcodebuild Debug/Release SUCCEEDED on
+  1.2.85, the state this inventory describes.

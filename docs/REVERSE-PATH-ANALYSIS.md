@@ -253,3 +253,40 @@ bluetoothd UCM 引擎（BT音频/2.4G/HRB/AFH 地图/t3-t4 时序, UpdateWifiSta
   不创建（两机一致）→ "WCM 未注册"= 系统设计行为，非 Hackintosh 故障（终局不变，证据升级）。
 - 框架真实符号（新资产）：WCMClientProxy / WCMSetting / WRM_UCMInterface / WRM_iRATInterface /
   WRMBasebandMetricsInterface（registerClient 等）→ 供 CoreWiFi 侧 coex 对照（可选）。
+
+
+## 十七、AWDL 结论修正（2026-11-08）：可修，非结构性
+
+### 修正依据
+第三方 MT7922 驱动（MT7922SkyWalk 1.2.x）提供了**可运行的参考实现**，
+证明 AWDL 在 x86 Hackintosh 上可行。
+
+**核心洞察**：AWDL 协议逻辑（PeerManager / TLV / 选举 / 主指示 / 可用窗口）
+**Apple 已在 IO80211Family 中完整实现**。驱动不需要从零实现私有协议，只需：
+
+```
+① 创建 AWDL 虚拟接口（role6 → awdl0，fe80）
+② 响应 MIF 命令：116 SYNC_PARAMS / 117 SYNC_ENABLED / 129 CHAN_SEQUENCE
+                164 PEER_TRAFFIC / 208 AF_TX_MODE
+③ Action 帧 handoff：IO80211AWDLPeerManager::actionFrameInput(...)
+④ RF 窗口事件：IO80211AWDLPeerManager::reportDataPathEvents(0x29/0x2b)
+⑤ 管理帧池：IO80211VirtualInterface::getMgmtFramePool() + IO80211MallocBufferPool
+```
+
+这与本项目此前逆向时的观察完全吻合：我们在 IO80211Family 中见过
+AWDLPeerManager / AWDLProtocol / WCLRoamManager 等完整类，但**我们的驱动从未创建
+AWDL 接口**，所以这些引擎从未被调用。
+
+### 参考实现的完成度（诚实评估）
+- ✅ 接口创建、周期窗口、发现帧、Action 接收、Peer 确认、MI 发送
+- ⚠️ 数据面主机侧队列正常，但**空中接收未确认**（DataRxRouted=0）
+- ❌ 端到端 AirDrop 文件送达**未验证**
+
+### 修正后的结论
+| 原判定 | 修正为 |
+|---|---|
+| AWDL 结构性不可修（无私有组网能力）| **可修**：复用 Family 内置 AWDL 引擎；工程量大（数周+），且数据面是难点 |
+| AirDrop/随航等全部不可解 | **理论上可行**，但依赖 Family 私有 ABI（版本敏感）|
+
+### 资料位置
+`REV/reference/mt7922-awdl/`（核心源码 + 11 篇实施记录 + 逆向笔记）

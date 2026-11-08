@@ -1,0 +1,88 @@
+Reversed actionFrameInput contract and OOB MI request (IO80211Family 1200.13.1)
+2026-10-30, read-only disassembly evidence for 1.2.1
+
+Symbols (nm of the extracted kext; all exported T)
+  __ZN22IO80211AWDLPeerManager16actionFrameInputEP13IO80211BufferjPvm  0x220e1ae
+  __ZN22IO80211AWDLPeerManager23actionFrameProcessInputEP13IO80211BufferjPvm 0x220e8b0
+  __ZN22IO80211AWDLPeerManager9isValidAFEPK13IO80211BufferPvm            (inlined body 0x220fa66)
+  __ZN22IO80211AWDLPeerManager24actionFrameHasCorrectOUIERK19IO80211BufferCursorm 0x2210200
+  __ZN22IO80211AWDLPeerManager13sendUnicastMIEP15IO80211AWDLPeerjjPh     0x2213c0a
+  __ZN22IO80211AWDLPeerManager22updatePrimaryPayloadMIE23MIPayloadUpdateReason_tbb 0x21fb36a
+  __ZN22IO80211AWDLPeerManager29buildMasterIndicationTemplateEPhjbjjbS0_P15IO80211AWDLPeer 0x2211b42
+
+actionFrameInput(this, IO80211Buffer *buffer, u32 channel, void *hdr, u64 headerLen)
+  - The 5th argument is the apple80211_act_frm_hdr length, NOT the frame length.
+    memmove(queueEntry+0x10, hdr, headerLen) with cmpq $0x49/ud1 trap when
+    headerLen >= 0x49 (RIP 0x220e8a5, the b248 panic). isValidAF rejects
+    headerLen <= 0x47. So headerLen must be exactly 0x48.
+  - Queue entry is 0x68 bytes: +0x00 buffer, +0x08 channel, +0x10 hdr copy
+    (0x48), +0x58 headerLen, +0x60 mach_absolute_time. Ring at ivars+0x41c8,
+    head 0x41d0, tail 0x41d4, mask 0x41dc, count 0x41e0.
+  - Enqueue branch (0x41f0 bit0 set, 0x3ee0 bit1 set, 0x19e bit0 clear, ring
+    not full) returns WITHOUT buffer->returnBuffer: ownership transfers to the
+    family queue. Every other branch calls buffer->vtable+0x118
+    (IO80211Buffer::returnBuffer). Return value is 0 on every path.
+  - Therefore the driver must never touch or free the buffer after the call.
+  - IO80211Buffer vtable (object vptr = __ZTV+0x10, verified from
+    __DATA __const, chained target = 0xffffff8000100000 | t36):
+    +0x118 returnBuffer, +0x130 getLength, +0x150 const getCursor,
+    +0x158 getBytesNoCopy, +0x178 writeBytes, +0x140 getCapacity.
+    getCursor returns {bytes, min(getLength, getCapacity)}.
+
+Buffer content (isValidAF + actionFrameHasCorrectOUI)
+  - cursor length must be >= 0x10.
+  - bytes[1..3] = 00 17 f2, bytes[4] = 0x08, bytes[5] (version) must be
+    NONZERO (version 0 takes the "bad oui" log and returns false).
+  - bytes[0] is the vendor category 0x7f (not compared). So the buffer holds
+    the Action body starting at 0x7f, not the 802.11 header.
+
+apple80211_act_frm_hdr (0x48 bytes) fields actually read by the family
+  +0x00 u8 peer[6]              source address; memcmp against ivars+0x9175,
+                                findPeer(hdr), addAWDLPeer(hdr)
+  +0x0c u32 channel.version     (apple80211_channel at +0x0c passed by value)
+  +0x10 u32 channel             determinePeerReachability (<0xf => 2.4 GHz),
+                                updateAFStats, peer ivars+0x598
+  +0x14 u32 channel.flags       reportRssi channel, testb $0x10 fast discovery
+  +0x2c s32 rssi                determinePeerReachability: 0 => state 3 and
+                                addAWDLPeer refuses to create the peer
+  +0x30 u32 rx timestamp, big-endian; actionFrameReport bswaps it and stores
+                                peer ivars+0x390 = getFwAFReceiveTimeStamp()
+  +0x40 u32                     fast-discovery check (0 is accepted)
+  addAWDLPeer(hdr,buffer): determinePeerReachability then peer address =
+  hdr[0..5], enqueue by hdr->rssi; hdr->channel decides 2.4/5 GHz rssi slots.
+  The existing ActionRx metadata[72] layout already matches these offsets.
+
+OOB MI request (0x38 bytes at the route data pointer)
+  - sendUnicastMI: buildMasterIndicationTemplate(manager+0x2358, 0x4b0, ...)
+    -> length at manager+0x2808; request: +0x00 version 0, +0x04 peer MAC,
+    +0x14 u16 6, +0x16 u32 options (ivars+0x9154), +0x1a u16 options2
+    (ivars+0x9158), +0x28 u16 MI length, +0x30 u64 frame pointer
+    (= manager+0x2358, an inline manager buffer, NOT a heap frame).
+  - updatePrimaryPayloadMI additionally uses route index 0xe1 (auto): peer
+    field 0xffffffff/0xffffffff (broadcast), +0x10 MI bitmap, same +0x28/+0x30.
+  - Route handlers apple80211setAWDL_OOB_REQUEST (0x95) and
+    setAWDL_OOB_AUTO_REQUEST (0xe1) pass the request pointer unchanged to our
+    interface slots 41/50.
+  - Payload is TLV-only (starts with the election/data-path TLV), no 0x7f
+    header; it must be wrapped like the native template (MIF subtype 3).
+
+1.2.1 implementation
+  - RX handoff: copy the 72-byte metadata with the frame capture, build the
+    pool buffer from the Action body at the 24/28-byte 802.11 offset, and call
+    actionFrameInput(manager, buffer, channel, metadata, 0x48). Buffer is
+    never returned or touched afterwards. Skips when the OUI/version or RSSI
+    is missing (rssi 0 cannot create a peer).
+  - MI TX: slots 41/50 validate version, length (<=0x4b0), that the frame
+    pointer equals manager+0x2358 and that manager+0x2808 low16 matches, copy
+    the TLV payload, then transmit it as a broadcast MIF (subtype 3) inside the
+    engine's currently granted window with the window's TxContext. The ack is
+    returned only after submitAwdlDiscovery published the descriptor; no
+    window or wrong peer channel => EAGAIN, no fake success.
+
+Build and package
+  UUID 3F604FAA-7EDD-3E28-85E7-8D1CABFED40E (x86_64, CFBundleVersion 1.2.1)
+  Package Build/darwin25/MT7922SkyWalk-1.2.1.zip sha256
+  6b8170b454f9c892c8e45c9ab239d183164e9bd0da291f5df47eddea32b7985c
+  Undefined symbols: 1.2.0 set + __ZN22IO80211AWDLPeerManager16actionFrameInputEP13IO80211BufferjPvm
+  Host test verification/awd4/master-indication.cpp passes (layout, TLV chain,
+  parse Valid, matchesAction, deadline/capacity/truncation rejects).
