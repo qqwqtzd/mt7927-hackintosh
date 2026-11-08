@@ -10,7 +10,7 @@ MT7927 驱动安装回滚说明
 备份位置
 --------
 1. macOS 用户目录（完整 EFI）：
-   /Users/links/EFI-before-mt7927-20261106-113056
+   /Volumes/EFI-backup
 
 2. 同一个 EFI 分区内（完整 EFI 副本）：
    EFI/EFI-backup-mt7927-20261106-113056

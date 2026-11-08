@@ -1,5 +1,19 @@
+# 构建产物
 out/
 dist/
 *.o
 *.log
 .DS_Store
+
+# 子仓库（各自独立 git，见 README）
+/WTLMtkWireless/
+/WTLMtkBluetooth/
+/WTLWifiMenu/
+
+# 第三方参考（体积大、非本项目产出）
+/linux-ref/
+/mediatek-mt7927-dkms/
+/third-party/
+/asus-driver/
+/firmware-mt7927-asus/
+/firmware-mt7927/
