@@ -152,6 +152,35 @@ sudo bash tools/restore-kexts.sh            # 回滚 MtkWlan 到上一稳定版 
 
 **预防**：双系统频繁切换后如遇此现象，优先做完整断电（而非重启）。
 
+## 双系统切换：蓝牙/Wi-Fi/USB 保持正常
+
+**macOS + Windows 双系统用户**，本驱动已做跨系统接管硬化（MtkBt 0.2.5+）：
+
+```
+原理：蓝牙芯片会被任一系统的驱动加载固件并保持运行状态。
+     切到另一个系统时，芯片处于"已运行/半加载"状态，
+     旧版驱动直接下载固件会超时失败（MtkBtState=error, MtkBtWarmPath=half-loaded）。
+
+修复：macOS 侧在下载固件前先做 subsystem reset（与 Linux btmtk 一致），
+     把芯片强制清成干净状态再下载 → 无论之前是什么状态都能接管。
+
+验证（实机双系统）：
+  macOS 普通重启 → 蓝牙正常
+  macOS 断电重启 → 蓝牙正常
+  macOS → Windows（多次）→ Windows 蓝牙正常
+  Windows → macOS       → macOS 自动复位接管，蓝牙正常
+  Wi-Fi 与 USB 端口全程正常
+```
+
+**诊断命令**（蓝牙异常时）：
+```bash
+ioreg -rc MtkBt -l -w0 | grep -E 'MtkBt(PreReset|State|WarmPath|Tries)'
+# 正常：PreReset=done  State=ready  Tries=1（无 WarmPath）
+# 失败：State=error + WarmPath=half-loaded → 见下方硬件排障
+```
+
+**若仍遇到蓝牙+USB 同时消失**（USB 设备在硬件层不枚举）：见下一节硬件排障。
+
 ## 恢复方案（重要）
 
 - OpenCore EFI 挂载后：`EFI/OC/RECOVERY/` 内含 **Windows 侧**一键脚本
