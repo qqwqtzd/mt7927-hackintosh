@@ -13,7 +13,8 @@ dist/
 # 第三方参考（体积大、非本项目产出）
 /linux-ref/
 /mediatek-mt7927-dkms/
-/third-party/
 /asus-driver/
 /firmware-mt7927-asus/
 /firmware-mt7927/
+
+# third-party/ 保留（项目依赖：BlueToolFixup / LegionBtFix，体积小）
